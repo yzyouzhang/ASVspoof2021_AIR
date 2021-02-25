@@ -360,11 +360,17 @@ class Subband(nn.Module):
         self.subband_num = subband_num
         self.enc_dim = enc_dim
         for i in range(self.subband_num):
-            setattr(self,
-                'sub'+str(i+1),
-                    ResNet(num_nodes, enc_dim // subband_num, resnet_type=resnet_type, nclasses=num_classes)
-            )
-        self.fc_out = nn.Linear(enc_dim // subband_num * subband_num, num_classes)
+            if i == 0:
+                setattr(self,
+                        'sub'+str(i+1),
+                        ResNet(num_nodes, enc_dim // subband_num + enc_dim % subband_num, resnet_type=resnet_type, nclasses=num_classes)
+                        )
+            else:
+                setattr(self,
+                        'sub' + str(i + 1),
+                        ResNet(num_nodes, enc_dim // subband_num, resnet_type=resnet_type, nclasses=num_classes)
+                        )
+        self.fc_out = nn.Linear(enc_dim, num_classes)
 
     def forward(self, x):
         subs = torch.split(x, x.shape[2] // self.subband_num, dim=2)
