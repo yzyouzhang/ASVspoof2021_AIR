@@ -364,7 +364,7 @@ class Subband(nn.Module):
                 'sub'+str(i+1),
                     ResNet(num_nodes, enc_dim // subband_num, resnet_type=resnet_type, nclasses=num_classes)
             )
-        self.fc_out = nn.Linear(enc_dim, num_classes)
+        self.fc_out = nn.Linear(enc_dim // subband_num * subband_num, num_classes)
 
     def forward(self, x):
         subs = torch.split(x, x.shape[2] // self.subband_num, dim=2)
@@ -386,7 +386,7 @@ if __name__ == "__main__":
     # print(output.shape)
     lfcc = torch.randn((1, 1, 60, 750))
     # lcnn = LCNN(4, 2, nclasses=2).cuda()
-    subband = Subband(1, 256, '18', 2, 4)
+    subband = Subband(1, 256, '18', 2, 3)
     # feat, output = resnet(lfcc)
     feat, output = subband(lfcc)
     print(feat.shape)
