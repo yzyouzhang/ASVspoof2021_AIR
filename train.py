@@ -5,7 +5,7 @@ import os
 import json
 import shutil
 import numpy as np
-from model import ResNet, ConvNet, LCNN
+from model import ResNet, ConvNet, LCNN, Subband
 from dataset import ASVspoof2019, LibriGenuine
 from torch.utils.data import DataLoader
 from evaluate_tDCF_asvspoof19 import compute_eer_and_tdcf
@@ -47,7 +47,7 @@ def initParams():
     parser.add_argument("--enc_dim", type=int, help="encoding dimension", default=256)
 
     parser.add_argument('-m', '--model', help='Model arch', default='resnet',
-                        choices=['cnn', 'resnet', 'lcnn', 'tdnn', 'lstm', 'rnn', 'cnn_lstm'])
+                        choices=['cnn', 'resnet', 'lcnn', 'tdnn', 'lstm', 'rnn', 'cnn_lstm', 'subband'])
 
     # Training hyperparameters
     parser.add_argument('--num_epochs', type=int, default=200, help="Number of epochs for training")
@@ -79,6 +79,8 @@ def initParams():
     parser.add_argument('--add_genuine', action='store_true', help="whether to iterate through genuine part multiple times")
     parser.add_argument('--test_on_eval', action='store_true',
                         help="whether to run EER on the evaluation set")
+
+    parser.add_argument('--subband_num', type=int, default=4, help="number of subband")
 
     args = parser.parse_args()
 
@@ -155,6 +157,9 @@ def train(args):
         cqcc_model = ConvNet(num_classes = 2, num_nodes = 47232, enc_dim = 256).to(args.device)
     elif args.model == 'lcnn':
         cqcc_model = LCNN(4, args.enc_dim, nclasses=2).to(args.device)
+    elif args.model == 'subband':
+        node_dict = {"CQCC": 4, "LFCC": 3, "LFBB": 3, "Melspec": 6, "LFB": 6, "CQT": 8, "STFT": 11, "MFCC": 87}
+        cqcc_model = Subband(int(np.ceil(node_dict[args.feat] / args.subband_num)), args.enc_dim, resnet_type='18', num_classes=2, subband_num=args.subband_num).to(args.device)
 
     if args.continue_training:
         cqcc_model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt')).to(args.device)
@@ -227,7 +232,7 @@ def train(args):
         iso_optimzer = torch.optim.SGD(iso_loss.parameters(), lr=args.lr)
 
     if args.add_loss == "ang_iso":
-        ang_iso = OCSoftmax(args.enc_dim, r_real=args.r_real, r_fake=args.r_fake, alpha=args.alpha).to(args.device)
+        ang_iso: object = OCSoftmax(args.enc_dim, r_real=args.r_real, r_fake=args.r_fake, alpha=args.alpha).to(args.device)
         ang_iso.train()
         ang_iso_optimzer = torch.optim.SGD(ang_iso.parameters(), lr=args.lr)
 
@@ -586,6 +591,9 @@ def train(args):
     return cqcc_model, loss_model
 
 
+def plot_loss(args):
+    pass
+
 
 if __name__ == "__main__":
     args = initParams()
@@ -610,3 +618,4 @@ if __name__ == "__main__":
     # model = torch.load(os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_cqcc_model_19.pt'))
     # loss_model = torch.load(os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_19.pt'))
     # VAeer_cm, VAmin_tDCF = test(args, model, loss_model, "dev")
+

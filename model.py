@@ -354,16 +354,48 @@ class LCNN(nn.Module):
 
         return feat, out
 
+class Subband(nn.Module):
+    def __init__(self, num_nodes=512, enc_dim=2, resnet_type='18', num_classes=2, subband_num=4):
+        super(Subband, self).__init__()
+        self.subband_num = subband_num
+        self.enc_dim = enc_dim
+        for i in range(self.subband_num):
+            if i == 0:
+                setattr(self,
+                        'sub'+str(i+1),
+                        ResNet(num_nodes, enc_dim // subband_num + enc_dim % subband_num, resnet_type=resnet_type, nclasses=num_classes)
+                        )
+            else:
+                setattr(self,
+                        'sub' + str(i + 1),
+                        ResNet(num_nodes, enc_dim // subband_num, resnet_type=resnet_type, nclasses=num_classes)
+                        )
+        self.fc_out = nn.Linear(enc_dim, num_classes)
+
+    def forward(self, x):
+        subs = torch.split(x, x.shape[2] // self.subband_num, dim=2)
+        feat_loader = []
+        for i in range(self.subband_num):
+            feati, _ = getattr(self, 'sub'+str(i+1))(subs[i])
+            feat_loader.append(feati)
+        feat = torch.cat(feat_loader, dim=-1)
+        out = self.fc_out(feat)
+        return feat, out
+
+
 if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
     # cqcc = torch.randn((32,1,90,788)).cuda()
-    # resnet = ResNet(4, 2, resnet_type='18', nclasses=2).cuda()
+    # resnet = ResNet(3, 2, resnet_type='18', nclasses=2).cuda()
     # _, output = resnet(cqcc)
     # print(output.shape)
-    lfcc = torch.randn((1, 1, 60, 750)).cuda()
-    lcnn = LCNN(4, 2, nclasses=2).cuda()
-    feat, output = lcnn(lfcc)
+    lfcc = torch.randn((1, 1, 60, 750))
+    # lcnn = LCNN(4, 2, nclasses=2).cuda()
+    subband = Subband(1, 256, '18', 2, 3)
+    # feat, output = resnet(lfcc)
+    feat, output = subband(lfcc)
+    print(feat.shape)
     print(output.shape)
     # cnn = ConvNet(num_classes = 2, num_nodes = 47232, enc_dim = 256).cuda()
     # _, output = cnn(lfcc)
