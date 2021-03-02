@@ -280,7 +280,14 @@ def train(args):
             if args.ratio < 1:
                 cqcc, tags, labels = shuffle(cqcc, tags, labels)
 
-            feats, cqcc_outputs = cqcc_model(cqcc)
+            if args.module == "subband":
+                feat_loader = torch.randn((args.subband_num, args.enc_dim))
+                feat_loader = cqcc_model(cqcc)
+                feats = torch.cat(feat_loader, dim=-1)
+                cqcc_outputs = nn.Linear(args.enc_dim, args.nclasses) if args.nclasses >= 2 else nn.Linear(args.enc_dim, 1)
+
+            else:
+                feats, cqcc_outputs = cqcc_model(cqcc)
 
             if args.base_loss == "bce":
                 cqcc_loss = criterion(cqcc_outputs, labels.unsqueeze(1).float())
