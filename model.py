@@ -250,21 +250,16 @@ class ResNet(nn.Module):
 
 class MaxFeatureMap2D(nn.Module):
     """ Max feature map (along 2D)
-
     MaxFeatureMap2D(max_dim=1)
-
     l_conv2d = MaxFeatureMap2D(1)
     data_in = torch.rand([1, 4, 5, 5])
     data_out = l_conv2d(data_in)
-
     Input:
     ------
     data_in: tensor of shape (batch, channel, ...)
-
     Output:
     -------
     data_out: tensor of shape (batch, channel//2, ...)
-
     Note
     ----
     By default, Max-feature-map is on channel dimension,
@@ -378,9 +373,10 @@ class Subband(nn.Module):
         for i in range(self.subband_num):
             feati, _ = getattr(self, 'sub'+str(i+1))(subs[i])
             feat_loader.append(feati)
-        feat = torch.cat(feat_loader, dim=-1)
-        out = self.fc_out(feat)
-        return feat, out
+        #print(feat_loader)
+        #feat = torch.cat(feat_loader, dim=-1)
+        #out_loader = self.fc_out(feat_loader)
+        return feat_loader
 
 
 if __name__ == "__main__":
@@ -394,7 +390,12 @@ if __name__ == "__main__":
     # lcnn = LCNN(4, 2, nclasses=2).cuda()
     subband = Subband(1, 256, '18', 2, 3)
     # feat, output = resnet(lfcc)
-    feat, output = subband(lfcc)
+    feat_loader = torch.randn((3,256))
+    #out_loader = torch.randn((1,256))
+    feat_loader = subband(lfcc)
+    feat = torch.cat(feat_loader, dim=-1)
+    output = nn.Linear(256, 1)(feat) 
+    #output = lfcc.fc_out(feat)
     print(feat.shape)
     print(output.shape)
     # cnn = ConvNet(num_classes = 2, num_nodes = 47232, enc_dim = 256).cuda()
