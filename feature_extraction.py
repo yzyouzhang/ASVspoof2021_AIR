@@ -137,6 +137,34 @@ class LFCC(torch_nn.Module):
         # done
         return lfcc_output
 
+
+class STFT(torch_nn.Module):
+    """ Short-time Fourier Transform
+    Calculate the spectrogram of the raw waveform
+    """
+
+    def __init__(self, fl, fs, fn, sr, with_emphasis=True,):
+        super(STFT, self).__init__()
+        self.fl = fl
+        self.fs = fs
+        self.fn = fn
+        self.sr = sr
+        self.with_emphasis = with_emphasis
+
+    def forward(self, x):
+        # pre-emphasis
+        if self.with_emphasis:
+            x[:, 1:] = x[:, 1:] - 0.97 * x[:, 0:-1]
+        # STFT
+        x_stft = torch.stft(x, self.fn, self.fs, self.fl,
+                            window=torch.hamming_window(self.fl),
+                            onesided=True, pad_mode="constant")
+        # amplitude
+        sp_amp = torch.norm(x_stft, 2, -1).pow(2).permute(0, 2, 1).contiguous()
+
+        return sp_amp
+
+
 if __name__ == "__main__":
     lfcc = LFCC(320, 160, 512, 16000, 20, with_energy=False)
     wav, sr = librosa.load("/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_train/flac/LA_T_3727749.flac", sr=16000)
