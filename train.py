@@ -236,6 +236,20 @@ def train(args):
         ang_iso.train()
         ang_iso_optimzer = torch.optim.SGD(ang_iso.parameters(), lr=args.lr)
 
+    if args.model == "subband":
+        subb_loss_lst = []
+        subb_opti_lst = []
+        for i in range(args.subband_num):
+            if i == 0:
+                subb_loss = OCSoftmax(args.enc_dim // args.subband_num + args.enc_dim % args.subband_num, r_real=args.r_real, r_fake=args.r_fake, alpha=args.alpha).to(
+                    args.device)
+            else:
+                subb_loss = OCSoftmax(args.enc_dim // args.subband_num, r_real=args.r_real, r_fake=args.r_fake, alpha=args.alpha).to(args.device)
+            subb_loss.train()
+            subb_loss_lst.append(subb_loss)
+            subb_opti = torch.optim.SGD(subb_loss.parameters(), lr=args.lr)
+            subb_opti_lst.append(subb_opti)
+
     early_stop_cnt = 0
     prev_loss = 1e8
     add_size = args.batch_size - int(args.batch_size * args.ratio)
@@ -280,23 +294,23 @@ def train(args):
             if args.ratio < 1:
                 cqcc, tags, labels = shuffle(cqcc, tags, labels)
 
-            if args.module == "subband":
-                feat_loader = torch.randn((args.subband_num, args.enc_dim))
+            if args.model == "subband":
                 feat_loader = cqcc_model(cqcc)
                 feats = torch.cat(feat_loader, dim=-1)
-                cqcc_outputs = nn.Linear(args.enc_dim, args.nclasses) if args.nclasses >= 2 else nn.Linear(args.enc_dim, 1)
+                # cqcc_outputs = nn.Linear(args.enc_dim, args.nclasses) if args.nclasses >= 2 else nn.Linear(args.enc_dim, 1)
 
             else:
                 feats, cqcc_outputs = cqcc_model(cqcc)
 
-            if args.base_loss == "bce":
-                cqcc_loss = criterion(cqcc_outputs, labels.unsqueeze(1).float())
-            else:
-                cqcc_loss = criterion(cqcc_outputs, labels)
+            # if args.base_loss == "bce":
+            #     cqcc_loss = criterion(cqcc_outputs, labels.unsqueeze(1).float())
+            # else:
+            #     cqcc_loss = criterion(cqcc_outputs, labels)
 
-            trainlossDict["base_loss"].append(cqcc_loss.item())
+            # trainlossDict["base_loss"].append(cqcc_loss.item())
 
             if args.add_loss == None:
+                cqcc_loss = criterion(cqcc_outputs, labels)
                 cqcc_optimizer.zero_grad()
                 cqcc_loss.backward()
                 cqcc_optimizer.step()
@@ -324,14 +338,25 @@ def train(args):
                 iso_optimzer.step()
 
             if args.add_loss == "ang_iso":
-                ang_isoloss, _ = ang_iso(feats, labels)
-                cqcc_loss = ang_isoloss * args.weight_loss
-                cqcc_optimizer.zero_grad()
-                ang_iso_optimzer.zero_grad()
-                trainlossDict[args.add_loss].append(ang_isoloss.item())
-                cqcc_loss.backward()
-                cqcc_optimizer.step()
-                ang_iso_optimzer.step()
+                if args.model == "subband":
+                    for k in range(args.subband_num):
+                        ang_isoloss, _ = subb_loss_lst[k](feat_loader[k], labels)
+                        cqcc_loss = ang_isoloss * args.weight_loss
+                        subb_opti_lst[k].zero_grad()
+                        cqcc_optimizer.zero_grad()
+                        trainlossDict[args.add_loss + str(k)].append(ang_isoloss.item())
+                        cqcc_loss.backward()
+                        cqcc_optimizer.step()
+                        subb_opti_lst[k].step()
+                else:
+                    ang_isoloss, _ = ang_iso(feats, labels)
+                    cqcc_loss = ang_isoloss * args.weight_loss
+                    cqcc_optimizer.zero_grad()
+                    ang_iso_optimzer.zero_grad()
+                    trainlossDict[args.add_loss].append(ang_isoloss.item())
+                    cqcc_loss.backward()
+                    cqcc_optimizer.step()
+                    ang_iso_optimzer.step()
 
             if args.add_loss == "lgm":
                 outputs, moutputs, likelihood = lgm_loss(feats, labels)
@@ -370,8 +395,13 @@ def train(args):
             # print(desc_str)
 
             with open(os.path.join(args.out_fold, "train_loss.log"), "a") as log:
-                log.write(str(epoch_num) + "\t" + str(i) + "\t" +
-                          str(trainlossDict[monitor_loss][-1]) + "\n")
+                message = str(epoch_num) + "\t" + str(i) + "\t"
+                if args.model == "subband":
+                    for k in range(args.subband_num):
+                        message += str(trainlossDict[monitor_loss+str(k)][-1]) + "\t"
+                else:
+                    message += str(trainlossDict[monitor_loss][-1])
+                log.write(message + "\n")
 
         if args.visualize and ((epoch_num+1) % 3 == 1):
             feat = torch.cat(ip1_loader, 0)
@@ -411,20 +441,26 @@ def train(args):
 
                 cqcc, tags, labels = shuffle(cqcc, tags, labels)
 
-                feats, cqcc_outputs = cqcc_model(cqcc)
-
-                if args.base_loss == "bce":
-                    cqcc_loss = criterion(cqcc_outputs, labels.unsqueeze(1).float())
-                    score = cqcc_outputs[:, 0]
+                if args.model == "subband":
+                    feat_loader = cqcc_model(cqcc)
+                    feats = torch.cat(feat_loader, dim=-1)
                 else:
-                    cqcc_loss = criterion(cqcc_outputs, labels)
-                    score = F.softmax(cqcc_outputs, dim=1)[:, 0]
+                    feats, cqcc_outputs = cqcc_model(cqcc)
+
+                # if args.base_loss == "bce":
+                #     cqcc_loss = criterion(cqcc_outputs, labels.unsqueeze(1).float())
+                #     score = cqcc_outputs[:, 0]
+                # else:
+                #     cqcc_loss = criterion(cqcc_outputs, labels)
+                #     score = F.softmax(cqcc_outputs, dim=1)[:, 0]
 
                 ip1_loader.append(feats)
                 idx_loader.append((labels))
                 tag_loader.append((tags))
 
                 if args.add_loss in [None]:
+                    cqcc_loss = criterion(cqcc_outputs, labels)
+                    score = F.softmax(cqcc_outputs, dim=1)[:, 0]
                     devlossDict["base_loss"].append(cqcc_loss.item())
                 elif args.add_loss in ["lgm", "center"]:
                     devlossDict[args.add_loss].append(cqcc_loss.item())
@@ -438,8 +474,18 @@ def train(args):
                     score = torch.norm(feats - iso_loss.center, p=2, dim=1)
                     devlossDict[args.add_loss].append(isoloss.item())
                 elif args.add_loss == "ang_iso":
-                    ang_isoloss, score = ang_iso(feats, labels)
-                    devlossDict[args.add_loss].append(ang_isoloss.item())
+                    if args.model == "subband":
+                        score_lst = []
+                        for k in range(args.subband_num):
+                            ang_isoloss, score = subb_loss_lst[k](feat_loader[k], labels)
+                            cqcc_loss = ang_isoloss * args.weight_loss
+                            score_lst.append(score)
+                            devlossDict[args.add_loss + str(k)].append(ang_isoloss.item())
+                        all_score = torch.stack(score_lst, 0)
+                        score = torch.mean(all_score, 0)
+                    else:
+                        ang_isoloss, score = ang_iso(feats, labels)
+                        devlossDict[args.add_loss].append(ang_isoloss.item())
 
                 score_loader.append(score)
 
@@ -455,7 +501,13 @@ def train(args):
             eer = min(eer, other_eer)
 
             with open(os.path.join(args.out_fold, "dev_loss.log"), "a") as log:
-                log.write(str(epoch_num) + "\t" + str(np.nanmean(devlossDict[monitor_loss])) + "\t" + str(eer) +"\n")
+                message = str(epoch_num) + "\t"
+                if args.model == "subband":
+                    for k in range(args.subband_num):
+                        message += str(np.nanmean(devlossDict[monitor_loss + str(k)])) + "\t"
+                else:
+                    message += str(np.nanmean(devlossDict[monitor_loss])) + "\t"
+                log.write(message + str(eer) + "\n")
             print("Val EER: {}".format(eer))
 
             if args.visualize and ((epoch_num+1) % 3 == 1):
@@ -478,20 +530,24 @@ def train(args):
                     tags = tags.to(args.device)
                     labels = labels.to(args.device)
 
-                    feats, cqcc_outputs = cqcc_model(cqcc)
-
-                    if args.base_loss == "bce":
-                        cqcc_loss = criterion(cqcc_outputs, labels.unsqueeze(1).float())
-                        score = cqcc_outputs[:, 0]
+                    if args.model == "subband":
+                        feat_loader = cqcc_model(cqcc)
+                        feats = torch.cat(feat_loader, dim=-1)
                     else:
-                        cqcc_loss = criterion(cqcc_outputs, labels)
-                        score = F.softmax(cqcc_outputs, dim=1)[:, 0]
+                        feats, cqcc_outputs = cqcc_model(cqcc)
+
+                    # if args.base_loss == "bce":
+                    #     cqcc_loss = criterion(cqcc_outputs, labels.unsqueeze(1).float())
+                    #     score = cqcc_outputs[:, 0]
+                    # else:
 
                     ip1_loader.append(feats)
                     idx_loader.append((labels))
                     tag_loader.append((tags))
 
                     if args.add_loss in [None]:
+                        cqcc_loss = criterion(cqcc_outputs, labels)
+                        score = F.softmax(cqcc_outputs, dim=1)[:, 0]
                         testlossDict["base_loss"].append(cqcc_loss.item())
                     elif args.add_loss in ["lgm", "center"]:
                         testlossDict[args.add_loss].append(cqcc_loss.item())
@@ -505,14 +561,18 @@ def train(args):
                         score = torch.norm(feats - iso_loss.center, p=2, dim=1)
                         testlossDict[args.add_loss].append(isoloss.item())
                     elif args.add_loss == "ang_iso":
-                        ang_isoloss, score = ang_iso(feats, labels)
-                        testlossDict[args.add_loss].append(ang_isoloss.item())
-                    elif args.add_loss == "multi_isolate":
-                        multi_isoloss = multi_iso_loss(feats, labels)
-                        testlossDict[args.add_loss].append(multi_isoloss.item())
-                    elif args.add_loss == "multicenter_isolate":
-                        multiisoloss = multicenter_iso_loss(feats, labels)
-                        testlossDict[args.add_loss].append(multiisoloss.item())
+                        if args.model == "subband":
+                            score_lst = []
+                            for k in range(args.subband_num):
+                                ang_isoloss, score = subb_loss_lst[k](feat_loader[k], labels)
+                                cqcc_loss = ang_isoloss * args.weight_loss
+                                score_lst.append(score)
+                                testlossDict[args.add_loss + str(k)].append(ang_isoloss.item())
+                            all_score = torch.stack(score_lst, 0)
+                            score = torch.mean(all_score, 0)
+                        else:
+                            ang_isoloss, score = ang_iso(feats, labels)
+                            testlossDict[args.add_loss].append(ang_isoloss.item())
 
                     score_loader.append(score)
 
@@ -528,7 +588,13 @@ def train(args):
                 eer = min(eer, other_eer)
 
                 with open(os.path.join(args.out_fold, "test_loss.log"), "a") as log:
-                    log.write(str(epoch_num) + "\t" + str(np.nanmean(testlossDict[monitor_loss])) + "\t" + str(eer) + "\n")
+                    message = str(epoch_num) + "\t"
+                    if args.model == "subband":
+                        for k in range(args.subband_num):
+                            message += str(np.nanmean(testlossDict[monitor_loss + str(k)])) + "\t"
+                    else:
+                        message += str(np.nanmean(devlossDict[monitor_loss])) + "\t"
+                    log.write(message + str(eer) + "\n")
                 print("Test EER: {}".format(eer))
 
 
@@ -597,6 +663,8 @@ def train(args):
 
     return cqcc_model, loss_model
 
+def subband_fusion_after_pretrain(args):
+    pass
 
 def plot_loss(args):
     pass
@@ -606,6 +674,8 @@ if __name__ == "__main__":
     args = initParams()
     if not args.test_only:
         _, _ = train(args)
+    if args.model == "subband":
+        subband_fusion_after_pretrain(args)
     # model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt'))
     # if args.add_loss is None:
     #     loss_model = None
@@ -618,7 +688,7 @@ if __name__ == "__main__":
     #     # res_file.write('\nTrain EER: %8.5f min-tDCF: %8.5f\n' % (TReer_cm, TRmin_tDCF))
     #     # res_file.write('\nVal EER: %8.5f min-tDCF: %8.5f\n' % (VAeer_cm, VAmin_tDCF))
     #     res_file.write('\nTest EER: %8.5f min-tDCF: %8.5f\n' % (TEeer_cm, TEmin_tDCF))
-    plot_loss(args)
+    # plot_loss(args)
 
     # # Test a checkpoint model
     # args = initParams()
