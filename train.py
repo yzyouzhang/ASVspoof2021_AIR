@@ -81,7 +81,7 @@ def initParams():
                         help="whether to run EER on the evaluation set")
 
     parser.add_argument('--subband_num', type=int, default=4, help="number of subband")
-
+    parser.add_argument('--pretrain_out_fold', type=str, help="model directory of the first stage of subband modeling", default="1")
     args = parser.parse_args()
 
     # Check ratio
@@ -113,6 +113,8 @@ def initParams():
         # Path for input data
         # assert os.path.exists(args.path_to_database)
         assert os.path.exists(args.path_to_features)
+        if args.model == "subband":
+            assert os.path.exists(args.pretrain_out_fold)
 
         # Save training arguments
         with open(os.path.join(args.out_fold, 'args.json'), 'w') as file:
@@ -663,8 +665,132 @@ def train(args):
 
     return cqcc_model, loss_model
 
+
 def subband_fusion_after_pretrain(args):
-    pass
+    
+    training_set = ASVspoof2019(args.access_type, args.path_to_features, 'train',
+                                args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
+    validation_set = ASVspoof2019(args.access_type, args.path_to_features, 'dev',
+                                  args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
+    trainDataLoader = DataLoader(training_set, batch_size=int(args.batch_size * args.ratio),
+                                 shuffle=True, num_workers=args.num_workers, collate_fn=training_set.collate_fn)
+    valDataLoader = DataLoader(validation_set, batch_size=args.batch_size,
+                               shuffle=True, num_workers=args.num_workers, collate_fn=validation_set.collate_fn)
+    test_set = ASVspoof2019(args.access_type, args.path_to_features, "eval", args.feat, feat_len=args.feat_len,
+                            pad_chop=args.pad_chop, padding=args.padding)
+    testDataLoader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers,
+                                collate_fn=test_set.collate_fn)
+
+    monitor_loss = args.add_loss
+    model = torch.load(os.path.join(args.pretrain_out_fold, 'checkpoint', 'anti-spoofing_cqcc_model_65.pt'))
+    ang_iso: object = OCSoftmax(args.enc_dim, r_real=args.r_real, r_fake=args.r_fake, alpha=args.alpha).to(args.device)
+    ang_iso.train()
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr,
+                                 betas=(args.beta_1, args.beta_2), eps=args.eps, weight_decay=0.0005)
+    for epoch_num in tqdm(range(args.num_epochs)):
+        feats, ip1_loader, tag_loader, idx_loader = [], [], [], []
+        model.train()
+        trainlossDict = defaultdict(list)
+        devlossDict = defaultdict(list)
+        testlossDict = defaultdict(list)
+        adjust_learning_rate(args, optimizer, epoch_num)
+        for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(trainDataLoader)):
+            cqcc = cqcc.transpose(2,3).to(args.device)
+            tags = tags.to(args.device)
+            labels = labels.to(args.device)
+            feat_loader = model(cqcc)
+            feats = torch.cat(feat_loader, dim=-1)
+            optimizer.zero_grad()
+            ang_isoloss, _ = ang_iso(feats, labels)
+            cqcc_loss = ang_isoloss * args.weight_loss
+            optimizer.zero_grad()
+            trainlossDict[args.add_loss].append(ang_isoloss.item())
+            cqcc_loss.backward()
+            optimizer.step()
+
+            ip1_loader.append(feats)
+            idx_loader.append((labels))
+            tag_loader.append((tags))
+
+        model.eval()
+        with torch.no_grad():
+            ip1_loader, tag_loader, idx_loader, score_loader = [], [], [], []
+            for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(valDataLoader)):
+                cqcc = cqcc.transpose(2, 3).to(args.device)
+                tags = tags.to(args.device)
+                labels = labels.to(args.device)
+                cqcc, tags, labels = shuffle(cqcc, tags, labels)
+                feat_loader = model(cqcc)
+                feats = torch.cat(feat_loader, dim=-1)
+
+                ip1_loader.append(feats)
+                idx_loader.append((labels))
+                tag_loader.append((tags))
+
+                ang_isoloss, score = ang_iso(feats, labels)
+                devlossDict[args.add_loss].append(ang_isoloss.item())
+
+                score_loader.append(score)
+
+            scores = torch.cat(score_loader, 0).data.cpu().numpy()
+            labels = torch.cat(idx_loader, 0).data.cpu().numpy()
+            eer = em.compute_eer(scores[labels == 0], scores[labels == 1])[0]
+            other_eer = em.compute_eer(-scores[labels == 0], -scores[labels == 1])[0]
+            eer = min(eer, other_eer)
+            print("Val EER: {}".format(eer))
+
+            if args.test_on_eval:
+                with torch.no_grad():
+                    ip1_loader, tag_loader, idx_loader, score_loader = [], [], [], []
+                    for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(testDataLoader)):
+                        cqcc = cqcc.transpose(2, 3).to(args.device)
+                        tags = tags.to(args.device)
+                        labels = labels.to(args.device)
+                        feat_loader = model(cqcc)
+                        feats = torch.cat(feat_loader, dim=-1)
+
+                        ip1_loader.append(feats)
+                        idx_loader.append((labels))
+                        tag_loader.append((tags))
+
+                        ang_isoloss, score = ang_iso(feats, labels)
+                        testlossDict[args.add_loss].append(ang_isoloss.item())
+
+                        score_loader.append(score)
+
+                    scores = torch.cat(score_loader, 0).data.cpu().numpy()
+                    labels = torch.cat(idx_loader, 0).data.cpu().numpy()
+                    eer = em.compute_eer(scores[labels == 0], scores[labels == 1])[0]
+                    other_eer = em.compute_eer(-scores[labels == 0], -scores[labels == 1])[0]
+                    eer = min(eer, other_eer)
+                    print("Test EER: {}".format(eer))
+
+        valLoss = np.nanmean(devlossDict[monitor_loss])
+        if (epoch_num + 1) % 1 == 0:
+            torch.save(model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_cqcc_model_%d.pt' % (epoch_num + 1)))
+
+            loss_model = ang_iso
+            torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
+
+        if valLoss < prev_loss:
+            # Save the model checkpoint
+            torch.save(model, os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt'))
+
+            loss_model = ang_iso
+            torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
+
+            prev_loss = valLoss
+            early_stop_cnt = 0
+        else:
+            early_stop_cnt += 1
+
+        if early_stop_cnt == 100:
+            with open(os.path.join(args.out_fold, 'args.json'), 'a') as res_file:
+                res_file.write('\nTrained Epochs: %d\n' % (epoch_num - 19))
+            break
+
+    return model, loss_model
+
 
 def plot_loss(args):
     pass
@@ -672,8 +798,8 @@ def plot_loss(args):
 
 if __name__ == "__main__":
     args = initParams()
-    if not args.test_only:
-        _, _ = train(args)
+    # if not args.test_only:
+    #     _, _ = train(args)
     if args.model == "subband":
         subband_fusion_after_pretrain(args)
     # model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt'))

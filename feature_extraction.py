@@ -143,7 +143,7 @@ class STFT(torch_nn.Module):
     Calculate the spectrogram of the raw waveform
     """
 
-    def __init__(self, fl, fs, fn, sr, with_emphasis=True,):
+    def __init__(self, fl, fs, fn, sr, with_emphasis=True):
         super(STFT, self).__init__()
         self.fl = fl
         self.fs = fs
