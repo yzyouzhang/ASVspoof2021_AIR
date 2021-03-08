@@ -81,6 +81,7 @@ def initParams():
                         help="whether to run EER on the evaluation set")
 
     parser.add_argument('--subband_num', type=int, default=4, help="number of subband")
+    parser.add_argument('--pretrained', action='store_true', help="the second stage training with pretrained subband model")
     parser.add_argument('--pretrain_out_fold', type=str, help="model directory of the first stage of subband modeling", default="1")
     args = parser.parse_args()
 
@@ -113,7 +114,7 @@ def initParams():
         # Path for input data
         # assert os.path.exists(args.path_to_database)
         assert os.path.exists(args.path_to_features)
-        if args.model == "subband":
+        if args.model == "subband" and args.pretrained:
             assert os.path.exists(args.pretrain_out_fold)
 
         # Save training arguments
@@ -682,12 +683,14 @@ def subband_fusion_after_pretrain(args):
                                 collate_fn=test_set.collate_fn)
 
     monitor_loss = args.add_loss
+    prev_loss = 1e8
     model = torch.load(os.path.join(args.pretrain_out_fold, 'checkpoint', 'anti-spoofing_cqcc_model_65.pt'))
     ang_iso: object = OCSoftmax(args.enc_dim, r_real=args.r_real, r_fake=args.r_fake, alpha=args.alpha).to(args.device)
     ang_iso.train()
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr,
                                  betas=(args.beta_1, args.beta_2), eps=args.eps, weight_decay=0.0005)
     for epoch_num in tqdm(range(args.num_epochs)):
+        print("Epoch:", epoch_num)
         feats, ip1_loader, tag_loader, idx_loader = [], [], [], []
         model.train()
         trainlossDict = defaultdict(list)
@@ -798,9 +801,9 @@ def plot_loss(args):
 
 if __name__ == "__main__":
     args = initParams()
-    # if not args.test_only:
-    #     _, _ = train(args)
-    if args.model == "subband":
+    if not args.test_only:
+        _, _ = train(args)
+    if args.model == "subband" and args.pretrained:
         subband_fusion_after_pretrain(args)
     # model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt'))
     # if args.add_loss is None:
