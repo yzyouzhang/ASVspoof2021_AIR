@@ -426,6 +426,7 @@ def train(args):
         cqcc_model.eval()
         with torch.no_grad():
             ip1_loader, tag_loader, idx_loader, score_loader = [], [], [], []
+            score_loaders = [[] for i in range(args.subband_num)]
             # with trange(2) as v:
             # with trange(len(valDataLoader)) as v:
             #     for i in v:
@@ -478,30 +479,48 @@ def train(args):
                     devlossDict[args.add_loss].append(isoloss.item())
                 elif args.add_loss == "ang_iso":
                     if args.model == "subband":
-                        score_lst = []
+                        score_lst = [[] for i in range(args.subband_num)]
                         for k in range(args.subband_num):
                             ang_isoloss, score = subb_loss_lst[k](feat_loader[k], labels)
                             cqcc_loss = ang_isoloss * args.weight_loss
-                            score_lst.append(score)
+                            score_lst[k].append(score)
                             devlossDict[args.add_loss + str(k)].append(ang_isoloss.item())
-                        all_score = torch.stack(score_lst, 0)
-                        score = torch.mean(all_score, 0)
+
+                        all_score, score = [], []
+                        for k in range(args.subband_num):
+                            all_score.append(torch.stack(score_lst[k], 0))
+                            score.append(torch.mean(all_score[k], 0))
                     else:
                         ang_isoloss, score = ang_iso(feats, labels)
                         devlossDict[args.add_loss].append(ang_isoloss.item())
 
-                score_loader.append(score)
+                if args.model == "subband":
+                    for k in range(args.subband_num):
+                        score_loaders[k].append(score[k])
+                else:
+                    score_loader.append(score)
 
                 # desc_str = ''
                 # for key in sorted(devlossDict.keys()):
                 #     desc_str += key + ':%.5f' % (np.nanmean(devlossDict[key])) + ', '
                 # # v.set_description(desc_str)
                 # print(desc_str)
-            scores = torch.cat(score_loader, 0).data.cpu().numpy()
-            labels = torch.cat(idx_loader, 0).data.cpu().numpy()
-            eer = em.compute_eer(scores[labels == 0], scores[labels == 1])[0]
-            other_eer = em.compute_eer(-scores[labels == 0], -scores[labels == 1])[0]
-            eer = min(eer, other_eer)
+            if args.model == "subband":
+                eers = []
+                for i in range(args.subband_num):
+                    scores = torch.cat(score_loaders[i], 0).data.cpu().numpy()
+                    labels = torch.cat(idx_loader, 0).data.cpu().numpy()
+                    eer = em.compute_eer(scores[labels == 0], scores[labels == 1])[0]
+                    other_eer = em.compute_eer(-scores[labels == 0], -scores[labels == 1])[0]
+                    eer = min(eer, other_eer)
+                    eers.append(eer)
+
+            else:
+                scores = torch.cat(score_loader, 0).data.cpu().numpy()
+                labels = torch.cat(idx_loader, 0).data.cpu().numpy()
+                eer = em.compute_eer(scores[labels == 0], scores[labels == 1])[0]
+                other_eer = em.compute_eer(-scores[labels == 0], -scores[labels == 1])[0]
+                eer = min(eer, other_eer)
 
             with open(os.path.join(args.out_fold, "dev_loss.log"), "a") as log:
                 message = str(epoch_num) + "\t"
@@ -511,7 +530,13 @@ def train(args):
                 else:
                     message += str(np.nanmean(devlossDict[monitor_loss])) + "\t"
                 log.write(message + str(eer) + "\n")
-            print("Val EER: {}".format(eer))
+
+            if args.model == "subband":
+                for i in range(args.subband_num):
+                    print("subband_num %d" % (i+1))
+                    print("Val EER: {}".format(eers[i]))
+            else:
+                print("Val EER: {}".format(eer))
 
             if args.visualize and ((epoch_num+1) % 3 == 1):
                 feat = torch.cat(ip1_loader, 0)
@@ -528,6 +553,7 @@ def train(args):
         if args.test_on_eval:
             with torch.no_grad():
                 ip1_loader, tag_loader, idx_loader, score_loader = [], [], [], []
+                score_loaders = [[] for i in range(args.subband_num)]
                 for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(testDataLoader)):
                     cqcc = cqcc.transpose(2,3).to(args.device)
                     tags = tags.to(args.device)
@@ -565,30 +591,46 @@ def train(args):
                         testlossDict[args.add_loss].append(isoloss.item())
                     elif args.add_loss == "ang_iso":
                         if args.model == "subband":
-                            score_lst = []
+                            score_lst = [[] for i in range(args.subband_num)]
                             for k in range(args.subband_num):
                                 ang_isoloss, score = subb_loss_lst[k](feat_loader[k], labels)
                                 cqcc_loss = ang_isoloss * args.weight_loss
-                                score_lst.append(score)
+                                score_lst[k].append(score)
                                 testlossDict[args.add_loss + str(k)].append(ang_isoloss.item())
-                            all_score = torch.stack(score_lst, 0)
-                            score = torch.mean(all_score, 0)
+                            all_score, score = [], []
+                            for k in range(args.subband_num):
+                                all_score.append(torch.stack(score_lst[k], 0))
+                                score.append(torch.mean(all_score[k], 0))
                         else:
                             ang_isoloss, score = ang_iso(feats, labels)
                             testlossDict[args.add_loss].append(ang_isoloss.item())
 
-                    score_loader.append(score)
+                    if args.model == "subband":
+                        for k in range(args.subband_num):
+                            score_loaders[k].append(score[k])
+                    else:
+                        score_loader.append(score)
 
                     # desc_str = ''
                     # for key in sorted(testlossDict.keys()):
                     #     desc_str += key + ':%.5f' % (np.nanmean(testlossDict[key])) + ', '
                     # # v.set_description(desc_str)
                     # print(desc_str)
-                scores = torch.cat(score_loader, 0).data.cpu().numpy()
-                labels = torch.cat(idx_loader, 0).data.cpu().numpy()
-                eer = em.compute_eer(scores[labels == 0], scores[labels == 1])[0]
-                other_eer = em.compute_eer(-scores[labels == 0], -scores[labels == 1])[0]
-                eer = min(eer, other_eer)
+                if args.model =="subband":
+                    eers = []
+                    for i in range(args.subband_num):
+                        scores = torch.cat(score_loaders[i], 0).data.cpu().numpy()
+                        labels = torch.cat(idx_loader, 0).data.cpu().numpy()
+                        eer = em.compute_eer(scores[labels == 0], scores[labels == 1])[0]
+                        other_eer = em.compute_eer(-scores[labels == 0], -scores[labels == 1])[0]
+                        eer = min(eer, other_eer)
+                        eers.append(eer)
+                else:
+                    scores = torch.cat(score_loader, 0).data.cpu().numpy()
+                    labels = torch.cat(idx_loader, 0).data.cpu().numpy()
+                    eer = em.compute_eer(scores[labels == 0], scores[labels == 1])[0]
+                    other_eer = em.compute_eer(-scores[labels == 0], -scores[labels == 1])[0]
+                    eer = min(eer, other_eer)
 
                 with open(os.path.join(args.out_fold, "test_loss.log"), "a") as log:
                     message = str(epoch_num) + "\t"
@@ -598,7 +640,13 @@ def train(args):
                     else:
                         message += str(np.nanmean(devlossDict[monitor_loss])) + "\t"
                     log.write(message + str(eer) + "\n")
-                print("Test EER: {}".format(eer))
+
+                if args.model == "subband":
+                    for i in range(args.subband_num):
+                        print("subband_num %d" % (i+1))
+                        print("Test EER: {}".format(eers[i]))
+                else:
+                    print("Test EER: {}".format(eer))
 
 
         valLoss = np.nanmean(devlossDict[monitor_loss])
@@ -801,7 +849,7 @@ def plot_loss(args):
 
 if __name__ == "__main__":
     args = initParams()
-    if not args.test_only and not args.pretrained:
+    if not args.test_only:
         _, _ = train(args)
     if args.model == "subband" and args.pretrained:
         subband_fusion_after_pretrain(args)
