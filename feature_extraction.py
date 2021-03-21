@@ -151,16 +151,32 @@ class STFT(torch_nn.Module):
         self.sr = sr
         self.with_emphasis = with_emphasis
 
+    def normalize_frames(m, epsilon = 1e-10):
+        return [(v - np.mean(v))/ max(np.std(v), epsilon) for v in m]
+
     def forward(self, x):
         # pre-emphasis
         if self.with_emphasis:
             x[:, 1:] = x[:, 1:] - 0.97 * x[:, 0:-1]
         # STFT
-        x_stft = torch.stft(x, self.fn, self.fs, self.fl,
-                            window=torch.hamming_window(self.fl),
-                            onesided=True, pad_mode="constant")
+        #x_stft = torch.stft(x, self.fn, self.fs, self.fl,
+        #                    window=torch.hamming_window(self.fl),
+        #                    onesided=True, pad_mode="constant")
+        
+        x_stft = librosa.stft(x, self.fn, self.fs, self.fl)
+        magnitude = np.abs(x_stft)
+        frame_features = np.array(normalize_frames(magnitude))
+        num_features = frame_features.shape[1]
+        
+        f = np.reshape(frames_features[:int(self.fl/2)], (int(self.fl/2), num_frames, 1))
+        
+        #log power
+        sp_amp = librosa.power_to_db(f ** 2, ref = np.max)
+         
+            
         # amplitude
-        sp_amp = torch.norm(x_stft, 2, -1).pow(2).permute(0, 2, 1).contiguous()
+        #sp_amp = torch.norm(x_stft, 2, -1).pow(2).permute(0, 2, 1).contiguous()
+        
 
         return sp_amp
 
