@@ -850,7 +850,7 @@ def plot_loss(args):
 
 if __name__ == "__main__":
     args = initParams()
-    if not args.test_only:
+    if not args.test_only and not args.pretrained:
         _, _ = train(args)
     if args.model == "subband" and args.pretrained:
         subband_fusion_after_pretrain(args)
