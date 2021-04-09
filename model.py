@@ -327,7 +327,7 @@ class LCNN(nn.Module):
                                    MaxFeatureMap2D(),
                                    nn.MaxPool2d((2, 2), (2, 2)))
         self.out = nn.Sequential(nn.Dropout(0.7),
-                                 nn.Linear((750 // 16) * (60 // 16) * 32, 160),
+                                 nn.Linear((750 // 16) * (num_nodes // 16) * 32, 160),
                                  MaxFeatureMap2D(),
                                  nn.Linear(80, self.enc_dim))
         self.fc_mu = nn.Linear(enc_dim, nclasses) if nclasses >= 2 else nn.Linear(enc_dim, 1)
