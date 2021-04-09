@@ -5,6 +5,7 @@ import torch.nn.init as init
 import os
 import random
 import numpy as np
+from pytorch_model_summary import summary
 
 ## Adapted from https://github.com/joaomonteirof/e2e_antispoofing
 ## https://github.com/nii-yamagishilab/project-NN-Pytorch-scripts/blob/newfunctions/
@@ -382,22 +383,24 @@ class Subband(nn.Module):
 if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
-    # cqcc = torch.randn((32,1,90,788)).cuda()
-    # resnet = ResNet(3, 2, resnet_type='18', nclasses=2).cuda()
-    # _, output = resnet(cqcc)
+    print(summary(ResNet(11, 256), torch.randn((1, 1, 257, 750)), show_input=False))
+
+    # # cqcc = torch.randn((32,1,90,788)).cuda()
+    # # resnet = ResNet(3, 2, resnet_type='18', nclasses=2).cuda()
+    # # _, output = resnet(cqcc)
+    # # print(output.shape)
+    # lfcc = torch.randn((1, 1, 60, 750))
+    # # lcnn = LCNN(4, 2, nclasses=2).cuda()
+    # subband = Subband(1, 256, '18', 2, 3)
+    # # feat, output = resnet(lfcc)
+    # feat_loader = torch.randn((3,256))
+    # #out_loader = torch.randn((1,256))
+    # feat_loader = subband(lfcc)
+    # feat = torch.cat(feat_loader, dim=-1)
+    # output = nn.Linear(256, 1)(feat)
+    # #output = lfcc.fc_out(feat)
+    # print(feat.shape)
     # print(output.shape)
-    lfcc = torch.randn((1, 1, 60, 750))
-    # lcnn = LCNN(4, 2, nclasses=2).cuda()
-    subband = Subband(1, 256, '18', 2, 3)
-    # feat, output = resnet(lfcc)
-    feat_loader = torch.randn((3,256))
-    #out_loader = torch.randn((1,256))
-    feat_loader = subband(lfcc)
-    feat = torch.cat(feat_loader, dim=-1)
-    output = nn.Linear(256, 1)(feat) 
-    #output = lfcc.fc_out(feat)
-    print(feat.shape)
-    print(output.shape)
-    # cnn = ConvNet(num_classes = 2, num_nodes = 47232, enc_dim = 256).cuda()
-    # _, output = cnn(lfcc)
-    # print(output.shape)
+    # # cnn = ConvNet(num_classes = 2, num_nodes = 47232, enc_dim = 256).cuda()
+    # # _, output = cnn(lfcc)
+    # # print(output.shape)
