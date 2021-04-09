@@ -159,7 +159,8 @@ def train(args):
     elif args.model == 'cnn':
         cqcc_model = ConvNet(num_classes = 2, num_nodes = 47232, enc_dim = 256).to(args.device)
     elif args.model == 'lcnn':
-        cqcc_model = LCNN(4, args.enc_dim, nclasses=2).to(args.device)
+        node_dict = {"STFT": 257, "LFCC": 60}
+        cqcc_model = LCNN(node_dict[args.feat], args.enc_dim, nclasses=2).to(args.device)
     elif args.model == 'subband':
         node_dict = {"CQCC": 4, "LFCC": 3, "LFBB": 3, "Melspec": 6, "LFB": 6, "CQT": 8, "STFT": 11, "MFCC": 87}
         cqcc_model = Subband(int(np.ceil(node_dict[args.feat] / args.subband_num)), args.enc_dim, resnet_type='18', num_classes=2, subband_num=args.subband_num).to(args.device)
@@ -849,7 +850,7 @@ def plot_loss(args):
 
 if __name__ == "__main__":
     args = initParams()
-    if not args.test_only and not args.pretrained:
+    if not args.test_only:
         _, _ = train(args)
     if args.model == "subband" and args.pretrained:
         subband_fusion_after_pretrain(args)
