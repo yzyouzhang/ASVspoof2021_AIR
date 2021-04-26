@@ -351,7 +351,7 @@ class LCNN(nn.Module):
         return feat, out
 
 class Subband(nn.Module):
-    def __init__(self, num_nodes=512, enc_dim=2, resnet_type='18', num_classes=2, subband_num=4):
+    def __init__(self, num_nodes=512, enc_dim=2, num_classes=2, subband_num=4):
         super(Subband, self).__init__()
         self.subband_num = subband_num
         self.enc_dim = enc_dim
@@ -359,12 +359,12 @@ class Subband(nn.Module):
             if i == 0:
                 setattr(self,
                         'sub'+str(i+1),
-                        ResNet(num_nodes, enc_dim // subband_num + enc_dim % subband_num, resnet_type=resnet_type, nclasses=num_classes)
+                        LCNN(num_nodes, enc_dim // subband_num + enc_dim % subband_num, nclasses=num_classes)
                         )
             else:
                 setattr(self,
                         'sub' + str(i + 1),
-                        ResNet(num_nodes, enc_dim // subband_num, resnet_type=resnet_type, nclasses=num_classes)
+                        LCNN(num_nodes, enc_dim // subband_num, nclasses=num_classes)
                         )
         self.fc_out = nn.Linear(enc_dim, num_classes)
 
@@ -382,8 +382,8 @@ class Subband(nn.Module):
 
 if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-
-    print(summary(ResNet(11, 256), torch.randn((1, 1, 257, 750)), show_input=False))
+    sub_num = 1
+    print(summary(ResNet(11, 256), torch.randn((1, 1, 257//sub_num, 750)), show_input=False))
 
     # # cqcc = torch.randn((32,1,90,788)).cuda()
     # # resnet = ResNet(3, 2, resnet_type='18', nclasses=2).cuda()

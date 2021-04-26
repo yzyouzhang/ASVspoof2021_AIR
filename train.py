@@ -162,8 +162,8 @@ def train(args):
         node_dict = {"STFT": 257, "LFCC": 60}
         cqcc_model = LCNN(node_dict[args.feat], args.enc_dim, nclasses=2).to(args.device)
     elif args.model == 'subband':
-        node_dict = {"CQCC": 4, "LFCC": 3, "LFBB": 3, "Melspec": 6, "LFB": 6, "CQT": 8, "STFT": 11, "MFCC": 87}
-        cqcc_model = Subband(int(np.ceil(node_dict[args.feat] / args.subband_num)), args.enc_dim, resnet_type='18', num_classes=2, subband_num=args.subband_num).to(args.device)
+        node_dict = {"CQCC": 4, "LFCC": 3, "LFBB": 3, "Melspec": 6, "LFB": 6, "CQT": 8, "STFT": 257, "MFCC": 87}
+        cqcc_model = Subband(int(np.ceil(node_dict[args.feat] / args.subband_num)), args.enc_dim, num_classes=2, subband_num=args.subband_num).to(args.device)
 
     if args.continue_training:
         cqcc_model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt')).to(args.device)
@@ -736,7 +736,7 @@ def subband_fusion_after_pretrain(args):
     model = torch.load(os.path.join(args.pretrain_out_fold, 'checkpoint', 'anti-spoofing_cqcc_model_65.pt'))
     ang_iso: object = OCSoftmax(args.enc_dim, r_real=args.r_real, r_fake=args.r_fake, alpha=args.alpha).to(args.device)
     ang_iso.train()
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr,
+    optimizer = torch.optim.Adam(model.fc_out.parameters(), lr=args.lr,
                                  betas=(args.beta_1, args.beta_2), eps=args.eps, weight_decay=0.0005)
     for epoch_num in tqdm(range(args.num_epochs)):
         print("Epoch:", epoch_num)
@@ -764,6 +764,10 @@ def subband_fusion_after_pretrain(args):
             idx_loader.append((labels))
             tag_loader.append((tags))
 
+        with open(os.path.join(args.out_fold, "train_loss.log"), "a") as log:
+                message = str(epoch_num) + "\t" + str(i) + "\t"
+                message += str(np.nanmean(trainlossDict[monitor_loss])) + "\t"
+                log.write(message + "\n")
         model.eval()
         with torch.no_grad():
             ip1_loader, tag_loader, idx_loader, score_loader = [], [], [], []
@@ -791,6 +795,11 @@ def subband_fusion_after_pretrain(args):
             eer = min(eer, other_eer)
             print("Val EER: {}".format(eer))
 
+            with open(os.path.join(args.out_fold, "dev_loss.log"), "a") as log:
+                message = str(epoch_num) + "\t"
+                message += str(np.nanmean(devlossDict[monitor_loss])) + "\t"
+                log.write(message + str(eer) + "\n")
+                
             if args.test_on_eval:
                 with torch.no_grad():
                     ip1_loader, tag_loader, idx_loader, score_loader = [], [], [], []
@@ -816,6 +825,10 @@ def subband_fusion_after_pretrain(args):
                     other_eer = em.compute_eer(-scores[labels == 0], -scores[labels == 1])[0]
                     eer = min(eer, other_eer)
                     print("Test EER: {}".format(eer))
+                    with open(os.path.join(args.out_fold, "test_loss.log"), "a") as log:
+                        message = str(epoch_num) + "\t"
+                        message += str(np.nanmean(testlossDict[monitor_loss])) + "\t"
+                        log.write(message + str(eer) + "\n")
 
         valLoss = np.nanmean(devlossDict[monitor_loss])
         if (epoch_num + 1) % 1 == 0:
