@@ -9,14 +9,19 @@ from dataset import ASVspoof2019
 from train import shuffle, OCSoftmax
 from utils import *
 
+
 def init():
     parser = argparse.ArgumentParser("load model scores")
-    parser.add_argument('--pretrain_out_fold', type=str, help="directory for pretrained model", default='/data/xinhui/models/')
+    parser.add_argument('--pretrain_out_fold', type=str, help="directory for pretrained model",
+                        default='/data/xinhui/models/')
     parser.add_argument("-a", "--access_type", type=str, help="LA or PA", default='LA')
-    parser.add_argument("-f", "--path_to_features", type=str, help="features path", default='/data2/neil/ASVspoof2019LA/')
+    parser.add_argument("-f", "--path_to_features", type=str, help="features path",
+                        default='/data2/neil/ASVspoof2019LA/')
     parser.add_argument("--feat_len", type=int, help="features length", default=750)
-    parser.add_argument('--pad_chop', type=str2bool, nargs='?', const=True, default=True, help="whether pad_chop in the dataset")
-    parser.add_argument('--padding', type=str, default='repeat', choices=['zero', 'repeat', 'silence'], help="how to pad short utterance")
+    parser.add_argument('--pad_chop', type=str2bool, nargs='?', const=True, default=True,
+                        help="whether pad_chop in the dataset")
+    parser.add_argument('--padding', type=str, default='repeat', choices=['zero', 'repeat', 'silence'],
+                        help="how to pad short utterance")
     parser.add_argument('--batch_size', type=int, default=64, help="Mini batch size for training")
     parser.add_argument('--num_workers', type=int, default=0, help="number of workers")
     parser.add_argument("--enc_dim", type=int, help="encoding dimension", default=256)
@@ -24,44 +29,83 @@ def init():
     parser.add_argument('--r_fake', type=float, default=0.2, help="r_fake for isolate loss")
     parser.add_argument('--alpha', type=float, default=20, help="scale factor for angular isolate loss")
     parser.add_argument('--save_path', type=str, default='/data/xinhui/scores/')
+    parser.add_argument("--gpu", type=str, help="GPU index", default="1")
     args = parser.parse_args()
+
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
+    args.cuda = torch.cuda.is_available()
+    args.device = torch.device("cuda" if args.cuda else "cpu")
 
     return args
 
-def produce_cqcc_file(args):
-    feats, ip1_loader, tag_loader, idx_loader, score_loader = [], [], [], [], []
-    model = torch.load(os.path.join(args.pretrain_out_fold, 'CQCC', 'checkpoint', 'anti-spoofing_cqcc_model_65.pt'))
-    validation_set = ASVspoof2019(args.access_type, args.path_to_features, 'dev',
-                                  'cqcc', feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
-    valDataLoader = DataLoader(validation_set, batch_size=args.batch_size,
-                               shuffle=True, num_workers=args.num_workers, collate_fn=validation_set.collate_fn)
 
-    ang_iso: object = OCSoftmax(args.enc_dim, r_real=args.r_real, r_fake=args.r_fake, alpha=args.alpha).to(args.device)
-    ang_iso.train()
+def produce_lfcc_file(args):
+    model = torch.load(os.path.join(args.pretrain_out_fold, 'lfcc', 'checkpoint', 'anti-spoofing_cqcc_model_64.pt'))
+    validation_set = ASVspoof2019(args.access_type, args.path_to_features, 'dev', 'LFCC', feat_len=args.feat_len,
+                                  pad_chop=args.pad_chop, padding=args.padding)
+    valDataLoader = DataLoader(validation_set, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
+                               collate_fn=validation_set.collate_fn)
 
-    for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(valDataLoader)):
-        cqcc = cqcc.transpose(2, 3).to(args.device)
-        tags = tags.to(args.device)
-        labels = labels.to(args.device)
-        cqcc, tags, labels = shuffle(cqcc, tags, labels)
-        feat_loader = model(cqcc)
-        feats = torch.cat(feat_loader, dim=-1)
-        ip1_loader.append(feats)
-        idx_loader.append(labels)
-        tag_loader.append(tags)
-        _, score = ang_iso(feats, labels)
-        score_loader.append(score)
+    model.eval()
+    with torch.no_grad():
+        ip1_loader, tag_loader, idx_loader = [], [], []
 
-    scores = torch.cat(score_loader, 0).data.cpu().numpy()
-    labels = torch.cat(idx_loader, 0).data.cpu().numpy()
+        for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(valDataLoader)):
+            cqcc = cqcc.transpose(2, 3).to(args.device)
+            tags = tags.to(args.device)
+            labels = labels.to(args.device)
+            cqcc, tags, labels = shuffle(cqcc, tags, labels)
+            feat_loader = model(cqcc)
+            feats = torch.cat(feat_loader, dim=-1)
+            ip1_loader.append(feats)
+            idx_loader.append(labels)
+            tag_loader.append(tags)
 
-    with open(os.path.join(args.save_path,'cqcc'), 'w') as f:
-        for lb, sc in zip(labels, scores):
-            f.write('{} {}\n'.format(lb, sc))
+        feats = torch.cat(ip1_loader, 0).data.cpu().numpy()
+        labels = torch.cat(idx_loader, 0).data.cpu().numpy()
+
+    with open(os.path.join(args.save_path, 'lfcc_score'), 'w') as f:
+        for lb, ft in zip(labels, feats):
+            f.write('{} {}\n'.format(lb, ft))
+
+    print('done')
+
+
+def produce_stft_file(args):
+    model = torch.load(os.path.join(args.pretrain_out_fold, 'stft', 'checkpoint', 'anti-spoofing_cqcc_model_64.pt'))
+    validation_set = ASVspoof2019(args.access_type, args.path_to_features, 'dev', 'STFT', feat_len=args.feat_len,
+                                  pad_chop=args.pad_chop, padding=args.padding)
+    valDataLoader = DataLoader(validation_set, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
+                               collate_fn=validation_set.collate_fn)
+
+    model.eval()
+    with torch.no_grad():
+        ip1_loader, tag_loader, idx_loader = [], [], []
+
+        for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(valDataLoader)):
+            cqcc = cqcc.transpose(2, 3).to(args.device)
+            tags = tags.to(args.device)
+            labels = labels.to(args.device)
+            cqcc, tags, labels = shuffle(cqcc, tags, labels)
+            feat_loader = model(cqcc)
+            feats = torch.cat(feat_loader, dim=-1)
+            ip1_loader.append(feats)
+            idx_loader.append(labels)
+            tag_loader.append(tags)
+
+        feats = torch.cat(ip1_loader, 0).data.cpu().numpy()
+        labels = torch.cat(idx_loader, 0).data.cpu().numpy()
+
+        with open(os.path.join(args.save_path, 'stft_score'), 'w') as f:
+            for lb, ft in zip(labels, feats):
+                f.write('{} {}\n'.format(lb, ft))
+
+        print('done')
 
 
 if __name__ == "__main__":
     args = init()
     if not os.path.exists(args.save_path):
         os.makedirs(args.save_path)
-    produce_cqcc_file(args)
+    produce_lfcc_file(args)
+    produce_stft_file(args)
