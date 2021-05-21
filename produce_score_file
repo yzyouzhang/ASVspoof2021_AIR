@@ -48,27 +48,29 @@ def produce_lfcc_file(args):
 
     model.eval()
     with torch.no_grad():
-        ip1_loader, tag_loader, idx_loader = [], [], []
+        tag_loader, idx_loader, fname_loader, scores = [], [], [], []
 
         for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(valDataLoader)):
             cqcc = cqcc.transpose(2, 3).to(args.device)
             tags = tags.to(args.device)
             labels = labels.to(args.device)
             cqcc, tags, labels = shuffle(cqcc, tags, labels)
-            feat_loader = model(cqcc)
-            feats = torch.cat(feat_loader, dim=-1)
-            ip1_loader.append(feats)
+            _, outs = model(cqcc)
+            score = (outs[:,1]-outs[:,0]).data.cpu().numpy().ravel()
+
             idx_loader.append(labels)
             tag_loader.append(tags)
+            fname_loader.extend(list(audio_fn))
+            scores.extend(score.tolist())
 
-        feats = torch.cat(ip1_loader, 0).data.cpu().numpy()
         labels = torch.cat(idx_loader, 0).data.cpu().numpy()
+        tags = torch.cat(tag_loader, 0).data.cpu().numpy()
 
-    with open(os.path.join(args.save_path, 'lfcc_score'), 'w') as f:
-        for lb, ft in zip(labels, feats):
-            f.write('{} {}\n'.format(lb, ft))
+        with open(os.path.join(args.save_path, 'lfcc_score'),'w') as f:
+            for fn, tag, lb, cm in zip(fname_loader, tags, labels, scores):
+                f.write('{} {} {} {}\n'.format(fn, tag, lb, cm))
 
-    print('done')
+        print('done')
 
 
 def produce_stft_file(args):
@@ -80,25 +82,27 @@ def produce_stft_file(args):
 
     model.eval()
     with torch.no_grad():
-        ip1_loader, tag_loader, idx_loader = [], [], []
+        tag_loader, idx_loader, fname_loader, scores = [], [], [], []
 
         for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(valDataLoader)):
             cqcc = cqcc.transpose(2, 3).to(args.device)
             tags = tags.to(args.device)
             labels = labels.to(args.device)
             cqcc, tags, labels = shuffle(cqcc, tags, labels)
-            feat_loader = model(cqcc)
-            feats = torch.cat(feat_loader, dim=-1)
-            ip1_loader.append(feats)
+            _, outs = model(cqcc)
+            score = (outs[:,1]-outs[:,0]).data.cpu().numpy().ravel()
+            
             idx_loader.append(labels)
             tag_loader.append(tags)
+            fname_loader.extend(list(audio_fn))
+            scores.extend(score.tolist())
 
-        feats = torch.cat(ip1_loader, 0).data.cpu().numpy()
         labels = torch.cat(idx_loader, 0).data.cpu().numpy()
+        tags = torch.cat(tag_loader, 0).data.cpu().numpy()
 
-        with open(os.path.join(args.save_path, 'stft_score'), 'w') as f:
-            for lb, ft in zip(labels, feats):
-                f.write('{} {}\n'.format(lb, ft))
+        with open(os.path.join(args.save_path, 'stft_score'),'w') as f:
+            for fn, tag, lb, cm in zip(fname_loader, tags, labels, scores):
+                f.write('{} {} {} {}\n'.format(fn, tag, lb, cm))
 
         print('done')
 
