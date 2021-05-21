@@ -6,7 +6,6 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from dataset import ASVspoof2019
-from train import shuffle, OCSoftmax
 from utils import *
 
 
@@ -40,67 +39,81 @@ def init():
 
 
 def produce_lfcc_file(args):
-    model = torch.load(os.path.join(args.pretrain_out_fold, 'lfcc', 'checkpoint', 'anti-spoofing_cqcc_model_64.pt'))
-    validation_set = ASVspoof2019(args.access_type, args.path_to_features, 'dev', 'LFCC', feat_len=args.feat_len,
-                                  pad_chop=args.pad_chop, padding=args.padding)
-    valDataLoader = DataLoader(validation_set, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
-                               collate_fn=validation_set.collate_fn)
+    model = torch.load(os.path.join(args.pretrain_out_fold,'lfcc','checkpoint','anti-spoofing_cqcc_model_64.pt'))
+    validation_set = ASVspoof2019(args.access_type, args.path_to_features, 'dev', 'LFCC', feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
+    valDataLoader = DataLoader(validation_set, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, collate_fn=validation_set.collate_fn)
+
 
     model.eval()
     with torch.no_grad():
-        tag_loader, idx_loader, fname_loader, scores = [], [], [], []
+        tag_loader, idx_loader, label_loader, fname_loader, score_loader = [], [], [], [], []
 
         for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(valDataLoader)):
             cqcc = cqcc.transpose(2, 3).to(args.device)
             tags = tags.to(args.device)
             labels = labels.to(args.device)
-            _, outs = model(cqcc)
-            score = (outs[:,1]-outs[:,0]).data.cpu().numpy().ravel()
+            feats, outs = model(cqcc)
+            score = F.softmax(outs, dim=1)[:, 0]
 
-            idx_loader.extend(['bonafide' if labels==1 else 'spoof' for labels in labels])
+            label_loader.append(labels)
+            idx_loader.extend(['spoof' if l==1 else 'bonafide' for l in labels])
             tag_loader.append(tags)
             fname_loader.extend(list(audio_fn))
-            scores.extend(score.tolist())
-            
+            score_loader.append(score)
+
+        labels = torch.cat(label_loader, 0).data.cpu().numpy()
         tags = torch.cat(tag_loader, 0).data.cpu().numpy()
+        scores = torch.cat(score_loader, 0).data.cpu().numpy()
+
+        eer = em.compute_eer(scores[labels==0], scores[labels==1])[0]
+        other_eer = em.compute_eer(-scores[labels==0], -scores[labels==1])[0]
+        eer = min(eer, other_eer)
+        print(eer)
 
         with open(os.path.join(args.save_path, 'lfcc_score'),'w') as f:
-            for fn, tag, lb, cm in zip(fname_loader, tags, labels, scores):
-                f.write('{} {} {} {}\n'.format(fn, tag, lb, cm))
+            for fn, tg, key, cm in zip(fname_loader, tags, idx_loader, scores):
+                f.write('{} {} {} {}\n'.format(fn, tg, key, cm))
 
-        print('done')
+    print('done')
+
 
 
 def produce_stft_file(args):
-    model = torch.load(os.path.join(args.pretrain_out_fold, 'stft', 'checkpoint', 'anti-spoofing_cqcc_model_64.pt'))
-    validation_set = ASVspoof2019(args.access_type, args.path_to_features, 'dev', 'STFT', feat_len=args.feat_len,
-                                  pad_chop=args.pad_chop, padding=args.padding)
-    valDataLoader = DataLoader(validation_set, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
-                               collate_fn=validation_set.collate_fn)
+    model = torch.load(os.path.join(args.pretrain_out_fold,'stft','checkpoint','anti-spoofing_cqcc_model_64.pt'))
+    validation_set = ASVspoof2019(args.access_type, args.path_to_features, 'dev', 'STFT', feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
+    valDataLoader = DataLoader(validation_set, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, collate_fn=validation_set.collate_fn)
 
     model.eval()
     with torch.no_grad():
-        tag_loader, idx_loader, fname_loader, scores = [], [], [], []
+        label_loader, tag_loader, idx_loader, fname_loader, score_loader = [], [], [], [], []
 
         for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(valDataLoader)):
             cqcc = cqcc.transpose(2, 3).to(args.device)
             tags = tags.to(args.device)
             labels = labels.to(args.device)
-            _, outs = model(cqcc)
-            score = (outs[:,1]-outs[:,0]).data.cpu().numpy().ravel()
-            
-            idx_loader.extend(['bonafide' if labels==1 else 'spoof' for labels in labels])
+            feats, outs = model(cqcc)
+            score = F.softmax(outs, dim=1)[:, 0]
+
+            idx_loader.extend(['spoof' if l==1 else 'bonafide' for l in labels])
             tag_loader.append(tags)
             fname_loader.extend(list(audio_fn))
-            scores.extend(score.tolist())
-            
+            score_loader.append(score)
+            label_loader.append(labels)
+
+        labels = torch.cat(label_loader, 0).data.cpu().numpy()
         tags = torch.cat(tag_loader, 0).data.cpu().numpy()
+        scores = torch.cat(score_loader, 0).data.cpu().numpy()
+
+        eer = em.compute_eer(scores[labels==0], scores[labels==1])[0]
+        other_eer = em.compute_eer(-scores[labels==0], -scores[labels==1])[0]
+        eer = min(eer, other_eer)
+        print(eer)
 
         with open(os.path.join(args.save_path, 'stft_score'),'w') as f:
-            for fn, tag, lb, cm in zip(fname_loader, tags, labels, scores):
-                f.write('{} {} {} {}\n'.format(fn, tag, lb, cm))
+            for fn, tg, key, cm in zip(fname_loader, tags, idx_loader, scores):
+                f.write('{} {} {} {}\n'.format(fn, tg, key, cm))
 
-        print('done')
+    print('done')
 
 
 if __name__ == "__main__":
