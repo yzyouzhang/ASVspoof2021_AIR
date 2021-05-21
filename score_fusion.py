@@ -15,21 +15,20 @@ from dataset import ASVspoof2019
 from train import shuffle
 
 
-def read_sfile(mname):
-    data_np = np.genfromtxt(os.path.join(args.saved_path, mname), dtype=str)
-    cols = ['fname', 'score']
-    df = pd.DataFrame(index=data_np[:, 0], data=data_np, columns=cols)
-    df['score'] = df['score'].astype(np.float32, copy=False)
-
+def read_file(fname):
+    data_np = np.genfromtxt(fname, dtype=str)
+    cols = ['fname', 'tag', 'label', 'score']
+    df = pd.DataFrame(index=data_np[:,0],data=data_np,columns=cols)
+    df['score']=df['score'].astype(np.float32, copy=False)
     return df
+  
 
-
-def avg_fuse(args):
-    frames = [read_sfile(m) for m in args.input]
-    merge_cols = ['fname']
-    fuse_result = pd.concat(frames).groupby(merge_cols, as_index=False)['score'].mean()
-
-    return fuse_result
+def avg_fuse(file_list): 
+    frames = [read_file(f) for f in file_list] 
+    merge_cols = ['fname', 'tag', 'label']
+    result_df = pd.concat(frames).groupby(merge_cols, as_index=False)['score'].mean()    
+        
+    return result_df
 
 
 def weighted_fuse(arg):
