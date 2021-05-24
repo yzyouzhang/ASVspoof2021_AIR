@@ -9,33 +9,26 @@ from pandas.core.frame import DataFrame
 from sklearn.ensemble import VotingClassifier
 from sklearn.model_selection import cross_val_score
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 from dataset import ASVspoof2019
+from train import shuffle
 
 
-def read_file(filename):
-    fp = open(filename)
-    score_list = []
-    for line in fp.readlines():
-        beg = line.find('[')
-        end = line.find(']')
-        line = line[beg + 1:end]
-        data = line.split()
-        score_list = score_list + data
-    for i in range(3):
-        score_list[i] = float(score_list[i])
-    score_list = score_list[:3]
-    score_list = pd.DataFrame(score_list)
+def read_file(fname):
+    data_np = np.genfromtxt(fname, dtype=str)
+    cols = ['fname', 'tag', 'label', 'score']
+    df = pd.DataFrame(index=data_np[:,0],data=data_np,columns=cols)
+    df['score']=df['score'].astype(np.float32, copy=False)
+    return df
+  
 
-    return score_list
-
-
-def avg_fuse(file_list):
-    score_list = [read_file(f) for f in file_list]
-    df = pd.concat(score_list, axis=1)
-    fuse_result = df.mean(1)
-
-    return fuse_result
+def avg_fuse(file_list): 
+    frames = [read_file(f) for f in file_list] 
+    merge_cols = ['fname', 'tag', 'label']
+    result_df = pd.concat(frames).groupby(merge_cols, as_index=False)['score'].mean()    
+        
+    return result_df
 
 
 def weighted_fuse(arg):
@@ -52,7 +45,7 @@ def weighted_fuse(arg):
     testDataLoader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers,
                                 collate_fn=test_set.collate_fn)
     models = []
-    score_list = [read_file(f) for f in args.input]
+    score_list = [read_sfile(f) for f in args.input]
     for m in range(len(args.imput)):
         models.append(torch.load(args.input[m]))
     eclf = VotingClassifier(estimators=[models], voting='soft')
@@ -82,9 +75,11 @@ if __name__ == '__main__':
     parser.add_argument("--ratio", type=float, default=1,
                         help="ASVspoof ratio in a training batch, the other should be external genuine speech")
     parser.add_argument('--num_workers', type=int, default=0, help="number of workers")
+    parser.add_argument("--gpu", type=str, help="GPU index", default="1")
+    parser.add_argument('--saved_path', type=str, default='/data/xinhui/scores/')
 
     args = parser.parse_args()
-    fuse_result = avg_fuse(args.input)
+    fuse_result = avg_fuse(args)
     fuse_result = weighted_fuse(args)
-#   fuse_result.to_csv(args.output, sep=' ', header=False, index=False)
+    #   fuse_result.to_csv(args.output, sep=' ', header=False, index=False)
     print(fuse_result)
