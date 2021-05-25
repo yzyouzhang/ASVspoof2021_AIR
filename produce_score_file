@@ -113,6 +113,9 @@ def produce_stft_file(args):
 
 if __name__ == "__main__":
     args = init()
+    if not os.path.exists(args.save_path):
+        os.makedirs(args.save_path)
+        
     features, eers = [], []
     features.append('lfcc')
     eers.append(produce_lfcc_file(args))
