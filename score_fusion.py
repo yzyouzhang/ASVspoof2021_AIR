@@ -1,85 +1,120 @@
 import argparse
 import os
 import shutil
-import torch
+import math
+
 import numpy as np
 import pandas as pd
 from pandas.core.frame import DataFrame
-
-from sklearn.ensemble import VotingClassifier
-from sklearn.model_selection import cross_val_score
-from torch.utils.data import DataLoader
-from tqdm import tqdm
-
-from dataset import ASVspoof2019
-from train import shuffle
+from numpy import array
+import eval_metrics as em
 
 
 def read_file(fname):
     data_np = np.genfromtxt(fname, dtype=str)
-    cols = ['fname', 'tag', 'label', 'score']
+    cols = ['fname', 'sysid', 'key', 'score']
     df = pd.DataFrame(index=data_np[:,0],data=data_np,columns=cols)
     df['score']=df['score'].astype(np.float32, copy=False)
     return df
-  
 
-def avg_fuse(file_list): 
-    frames = [read_file(f) for f in file_list] 
-    merge_cols = ['fname', 'tag', 'label']
-    result_df = pd.concat(frames).groupby(merge_cols, as_index=False)['score'].mean()    
-        
+
+def avg_fuse(args):
+    frames = [read_file(f) for f in args.input]
+    merge_cols = ['fname', 'sysid', 'key']
+    result_df = pd.concat(frames).groupby(merge_cols, as_index=False)['score'].sum()
+    result_df.to_csv(args.output + 'avg_fuse_score', sep=' ', header=False, index=False)
+    print('done')
+
     return result_df
 
 
-def weighted_fuse(arg):
-    training_set = ASVspoof2019(args.access_type, args.path_to_features, 'train',
-                                args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
-    validation_set = ASVspoof2019(args.access_type, args.path_to_features, 'dev',
-                                  args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
-    trainDataLoader = DataLoader(training_set, batch_size=int(args.batch_size * args.ratio),
-                                 shuffle=True, num_workers=args.num_workers, collate_fn=training_set.collate_fn)
-    valDataLoader = DataLoader(validation_set, batch_size=args.batch_size,
-                               shuffle=True, num_workers=args.num_workers, collate_fn=validation_set.collate_fn)
-    test_set = ASVspoof2019(args.access_type, args.path_to_features, "eval", args.feat, feat_len=args.feat_len,
-                            pad_chop=args.pad_chop, padding=args.padding)
-    testDataLoader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers,
-                                collate_fn=test_set.collate_fn)
-    models = []
-    score_list = [read_sfile(f) for f in args.input]
-    for m in range(len(args.imput)):
-        models.append(torch.load(args.input[m]))
-    eclf = VotingClassifier(estimators=[models], voting='soft')
-    eclf = eclf.fit(training_set, validation_set)
-    weights = eclf.get_params
-    weights = pd.DataFrame(weights)
-    fuse_result = score_list.mul(weights).mean(1)
-
-    return fuse_result
+def weighted_fuse(args):
+    weight = []
+    frames = [read_file(f) for f in args.input]
+    merge_cols = ['fname', 'sysid', 'key']
+    weight = cal_weight(args)
+    
+    for i in range(len(frames)):
+        frames[i]['score'] = frames[i]['score']*weight[i]
+    result_df = pd.concat(frames).groupby(merge_cols, as_index=False)['score'].mean()
+    result_df.to_csv(args.output + 'avg_fuse_score', sep=' ', header=False, index=False)
+    print('done')
+    
+    return result_df
+    
+def cal_weight(args):
+    
+    weight = []
+    
+    for i in range(len(args.input)):
+        with open('/data/xinhui/scores/model_eers') as f:
+            for line in f:
+                feat = line.split()[0]
+                eer = line.split()[1]
+                
+                if feat in args.input[i]:
+                    weight.append(eer)
+    
+    weight = list(map(float,weight))
+    print("original eers:", weight)
+    max_w = max(weight)
+    min_w = min(weight)
+    
+    if max_w == min_w:
+        print("equal weight")
+        pass
+    else:
+        for i in range(len(weight)):
+            weight[i] = (max_w-weight[i])/(max_w-min_w)
+            if weight[i]==0:
+                weight[i]=0.00001
+            else:
+                pass
+  
+        k = 1.0/math.log(len(weight))
+        lnf = [None for i in range(len(weight))]
+        lnf = array(lnf)
+        for i in range(len(weight)):
+            if weight[i]==0:
+                lnfi = 0.0
+            else:
+                p = weight[i]/sum(weight)
+                lnfi = math.log(p) * p * (-k)
+            weight[i] = 1-lnfi
+        sum_w = sum(weight)   
+    
+        for i in range(len(weight)):
+            weight[i] = weight[i]/sum_w
+    
+    return weight
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('Result Fusion Utility')
     parser.add_argument('-i', '--input', type=str, nargs='+', required=True, help='models for fusion')
-    parser.add_argument('-o', '--output', type=str, help="output folder")
-    parser.add_argument("-a", "--access_type", type=str, help="LA or PA", default='LA')
-    parser.add_argument("-f", "--path_to_features", type=str, help="features path",
-                        default='/data2/neil/ASVspoof2019LA/')
-    parser.add_argument("--feat", type=str, help="which feature to use", default='LFCC',
-                        choices=["CQCC", "LFCC", "MFCC", "STFT", "Melspec", "CQT", "LFB", "LFBB"])
-    parser.add_argument("--feat_len", type=int, help="features length", default=750)
-    parser.add_argument('--pad_chop', type=str2bool, nargs='?', const=True, default=True,
-                        help="whether pad_chop in the dataset")
-    parser.add_argument('--padding', type=str, default='repeat', choices=['zero', 'repeat', 'silence'],
-                        help="how to pad short utterance")
-    parser.add_argument('--batch_size', type=int, default=64, help="Mini batch size for training")
-    parser.add_argument("--ratio", type=float, default=1,
-                        help="ASVspoof ratio in a training batch, the other should be external genuine speech")
-    parser.add_argument('--num_workers', type=int, default=0, help="number of workers")
-    parser.add_argument("--gpu", type=str, help="GPU index", default="1")
-    parser.add_argument('--saved_path', type=str, default='/data/xinhui/scores/')
-
+    parser.add_argument('-o', '--output', type=str, help="output folder", default='/data/xinhui/scores/fuse_scores/')
+    parser.add_argument('-m', '--method', type=str, help='fusion method', required=True, choices=['avg', 'wght'])
     args = parser.parse_args()
-    fuse_result = avg_fuse(args)
-    fuse_result = weighted_fuse(args)
+    
+    if not os.path.exists(args.output):
+            os.makedirs(args.output)
+    print('Processing input files :', args.input)
+
+    if args.method=='avg':
+        fuse_result = avg_fuse(args)
+        
+    elif args.method=='wght':
+        fuse_result = weighted_fuse(args)
+    
     #   fuse_result.to_csv(args.output, sep=' ', header=False, index=False)
-    print(fuse_result)
+
+    target_scores, nontarget_scores = [], []
+    fuse_result0 = fuse_result[fuse_result['key'] == 'bonafide']
+    fuse_result1 = fuse_result[fuse_result['key'] == 'spoof']
+    target_scores = (fuse_result0['score'])
+    nontarget_scores = (fuse_result1['score'])
+
+    eer = em.compute_eer(target_scores, nontarget_scores)[0]
+    other_eer = em.compute_eer(-target_scores, -nontarget_scores)[0]
+    eer = min(eer, other_eer)
+    print(eer)
