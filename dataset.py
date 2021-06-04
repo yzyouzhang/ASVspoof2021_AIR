@@ -245,6 +245,48 @@ class ASVspoof2015(Dataset):
             # return feat_mat, default_collate(tag), default_collate(label), default_collate(this_len)
             return default_collate(feat_mat), default_collate(tag), default_collate(label)
 
+class ASVspoof2021LAeval(Dataset):
+    def __init__(self, path_to_features="/dataNVME/neil/ASVspoof2021LAFeatures", feature='LFCC', feat_len=750, pad_chop=True, padding='repeat'):
+        super(ASVspoof2021LAeval, self).__init__()
+        self.path_to_features = path_to_features
+        self.ptf = path_to_features
+        self.feat_len = feat_len
+        self.feature = feature
+        self.pad_chop = pad_chop
+        self.padding = padding
+        self.all_files = librosa.util.find_files(os.path.join(self.ptf, self.feature), ext="pt")
+
+    def __len__(self):
+        return len(self.all_files)
+
+    def __getitem__(self, idx):
+        filepath = self.all_files[idx]
+        basename = os.path.basename(filepath)
+        all_info = basename.split(".")[0].split("_")
+        assert len(all_info) == 4
+        featureTensor = torch.load(filepath)
+        this_feat_len = featureTensor.shape[1]
+        if self.pad_chop:
+            if this_feat_len > self.feat_len:
+                startp = np.random.randint(this_feat_len - self.feat_len)
+                featureTensor = featureTensor[:, startp:startp + self.feat_len, :]
+            if this_feat_len < self.feat_len:
+                if self.padding == 'zero':
+                    featureTensor = padding_Tensor(featureTensor, self.feat_len)
+                elif self.padding == 'repeat':
+                    featureTensor = repeat_padding_Tensor(featureTensor, self.feat_len)
+                elif self.padding == 'silence':
+                    featureTensor = silence_padding_Tensor(featureTensor, self.feat_len)
+                else:
+                    raise ValueError('Padding should be zero or repeat!')
+        else:
+            pass
+        filename =  "_".join(all_info[:3])
+        return featureTensor, filename
+
+    def collate_fn(self, samples):
+        if self.pad_chop:
+            return default_collate(samples)
 
 def padding_Tensor(spec, ref_len):
     _, cur_len, width = spec.shape
@@ -279,16 +321,22 @@ if __name__ == "__main__":
     # samples = [training_set[26], training_set[27], training_set[28], training_set[29]]
     # out = training_set.collate_fn(samples)
 
-    training_set = ASVspoof2015("/data2/neil/ASVspoof2015/", part="eval")
-    feat_mat, _, tag, label = training_set[299]
+    # training_set = ASVspoof2015("/data2/neil/ASVspoof2015/", part="eval")
+    # feat_mat, _, tag, label = training_set[299]
+    # print(len(training_set))
+    # print(tag)
+    # print(label)
+
+    training_set = ASVspoof2021LAeval()
+    feat_mat, filename = training_set[299]
     print(len(training_set))
-    print(tag)
-    print(label)
+    print(filename)
+    print(feat_mat.shape)
 
 
-    trainDataLoader = DataLoader(training_set, batch_size=32, shuffle=True, num_workers=0, collate_fn=training_set.collate_fn)
-    feat_mat_batch, _, tags, labels = [d for d in next(iter(trainDataLoader))]
-    print(feat_mat_batch.shape)
+    # trainDataLoader = DataLoader(training_set, batch_size=32, shuffle=True, num_workers=0, collate_fn=training_set.collate_fn)
+    # feat_mat_batch, _, tags, labels = [d for d in next(iter(trainDataLoader))]
+    # print(feat_mat_batch.shape)
     # print(this_len)
     # print(feat_mat_batch)
 

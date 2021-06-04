@@ -338,6 +338,60 @@ class ASVspoof2015Raw(Dataset):
         return default_collate(samples)
 
 
+class ASVspoof2021evalRaw(Dataset):
+    def __init__(self, path_to_database="/data2/neil/ASVspoof2021/ASVspoof2021_LA_eval/flac"):
+        super(ASVspoof2021evalRaw, self).__init__()
+        self.ptd = path_to_database
+        self.path_to_audio = self.ptd
+        self.all_files = librosa.util.find_files(self.path_to_audio, ext="flac")
+
+    def __len__(self):
+        return len(self.all_files)
+
+    def __getitem__(self, idx):
+        filepath = self.all_files[idx]
+        waveform, sr = torchaudio_load(filepath)
+        filename = os.path.basename(filepath)[:-5]
+        return waveform, filename
+
+
+class ASVspoof2019LARaw_withTransmission(Dataset):
+    def __init__(self, path_to_database="/data/shared/LA_aug", path_to_protocol="/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/", part='train'):
+        super(ASVspoof2019LARaw_withTransmission, self).__init__()
+        self.ptd = path_to_database
+        self.part = part
+        self.path_to_audio = os.path.join(self.ptd, self.part)
+        self.path_to_protocol = path_to_protocol
+        protocol = os.path.join(self.path_to_protocol,
+                                'ASVspoof2019.' + "LA" + '.cm.' + self.part + '.trl.txt')
+        if self.part == "eval":
+            protocol = os.path.join(self.ptd, "LA", 'ASVspoof2019_' + "LA" +
+                                    '_cm_protocols/ASVspoof2019.' + "LA" + '.cm.' + self.part + '.trl.txt')
+        self.tag = {"-": 0, "A01": 1, "A02": 2, "A03": 3, "A04": 4, "A05": 5, "A06": 6, "A07": 7}
+        self.label = {"spoof": 1, "bonafide": 0}
+        self.all_files = librosa.util.find_files(self.path_to_audio, ext="wav")
+
+        with open(protocol, 'r') as f:
+            audio_info = {}
+            for info in f.readlines():
+                speaker, filename, _, tag, label = info.strip().split()
+                audio_info[filename] = (speaker, tag, label)
+            self.all_info = audio_info
+
+    def __len__(self):
+        return len(self.all_files)
+
+    def __getitem__(self, idx):
+        filepath = self.all_files[idx]
+        waveform, sr = torchaudio_load(filepath)
+        filebasename = os.path.basename(filepath)[:-4]
+        channel = filebasename.split("_")[-1]
+        filename = filebasename[:12]
+        speaker, tag, label = self.all_info[filename]
+
+        return waveform, filename, tag, label, channel
+
+
 if __name__ == "__main__":
     # vctk = VCTK_092(root="/data/neil/VCTK", download=False)
     # print(len(vctk))
@@ -381,11 +435,20 @@ if __name__ == "__main__":
     # print(tag)
     # print(label)
 
-    asvspoof2015 = ASVspoof2015Raw(part="eval")
-    print(len(asvspoof2015))
-    waveform, filename, tag, label = asvspoof2015[123]
+    # asvspoof2015 = ASVspoof2015Raw(part="eval")
+    # print(len(asvspoof2015))
+    # waveform, filename, tag, label = asvspoof2015[123]
+    # print(waveform.shape)
+    # print(filename)
+    # print(tag)
+    # print(label)
+    # pass
+
+    asvspoof2021Raw_LA_aug = ASVspoof2019LARaw_withTransmission(part="train")
+    print(len(asvspoof2021Raw_LA_aug))
+    waveform, filename, tag, label, channel = asvspoof2021Raw_LA_aug[1230]
     print(waveform.shape)
     print(filename)
     print(tag)
     print(label)
-    pass
+    print(channel)
