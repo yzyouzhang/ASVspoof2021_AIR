@@ -281,7 +281,7 @@ class ASVspoof2021LAeval(Dataset):
                     raise ValueError('Padding should be zero or repeat!')
         else:
             pass
-        filename =  "_".join(all_info[:3])
+        filename =  "_".join(all_info[1:])
         return featureTensor, filename
 
     def collate_fn(self, samples):

@@ -142,7 +142,8 @@ device = torch.device("cuda" if cuda else "cpu")
 # print("Done!")
 
 
-for part_ in ["train", "dev"]:
+# for part_ in ["train", "dev"]:
+for part_ in ["dev"]:
     asvspoof2021Raw_LA_aug = dataset.ASVspoof2019LARaw_withTransmission(part=part_)
     target_dir = os.path.join("/dataNVME/neil/ASVspoof2019LA_augFeatures", part_, "LFCC")
     lfcc = LFCC(320, 160, 512, 16000, 20, with_energy=False)
