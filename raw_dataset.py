@@ -20,7 +20,12 @@ torch.set_default_tensor_type(torch.FloatTensor)
 SampleType = Tuple[Tensor, int, str, str, str]
 
 def torchaudio_load(filepath):
-    wave, sr = librosa.load(filepath, sr=16000)
+    try:
+        wave, sr = librosa.load(filepath, sr=16000)
+    except:
+        print(filepath)
+        wave = np.zeros(8000)
+        sr = 16000
     waveform = torch.Tensor(np.expand_dims(wave, axis=0))
     return [waveform, sr]
 
@@ -386,7 +391,8 @@ class ASVspoof2019LARaw_withTransmission(Dataset):
         waveform, sr = torchaudio_load(filepath)
         filebasename = os.path.basename(filepath)[:-4]
         channel = filebasename.split("_")[-1]
-        filename = filebasename[:12]
+        filename = "_".join(filebasename.split("_")[:-1])
+
         speaker, tag, label = self.all_info[filename]
 
         return waveform, filename, tag, label, channel
