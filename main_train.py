@@ -370,31 +370,6 @@ def train(args):
                 cqcc_optimizer.step()
                 ang_iso_optimzer.step()
 
-            if args.add_loss == "lgm":
-                outputs, moutputs, likelihood = lgm_loss(feats, labels)
-                cqcc_loss = criterion(moutputs, labels)
-                trainlossDict["base_loss"].append(cqcc_loss.item())
-                lgmloss = 0.5 * likelihood
-                # print(criterion(moutputs, labels).data, likelihood.data)
-                cqcc_optimizer.zero_grad()
-                lgm_optimzer.zero_grad()
-                cqcc_loss += lgmloss
-                trainlossDict[args.add_loss].append(lgmloss.item())
-                cqcc_loss.backward()
-                cqcc_optimizer.step()
-                lgm_optimzer.step()
-
-            if args.add_loss == "lgcl":
-                outputs, moutputs = lgcl_loss(feats, labels)
-                cqcc_loss = criterion(moutputs, labels)
-                # print(criterion(moutputs, labels).data)
-                trainlossDict[args.add_loss].append(cqcc_loss.item())
-                cqcc_optimizer.zero_grad()
-                lgcl_optimzer.zero_grad()
-                cqcc_loss.backward()
-                cqcc_optimizer.step()
-                lgcl_optimzer.step()
-
             if args.device_adv:
                 channel = channel.to(args.device)
                 feats, _ = cqcc_model(cqcc)

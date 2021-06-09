@@ -13,6 +13,7 @@ import warnings
 from typing import Any, Tuple, Union
 from pathlib import Path
 from utils import download_url, extract_archive, walk_files
+import soundfile as sf
 
 
 torch.set_default_tensor_type(torch.FloatTensor)
@@ -24,8 +25,8 @@ def torchaudio_load(filepath):
         wave, sr = librosa.load(filepath, sr=16000)
     except:
         print(filepath)
-        wave = np.zeros(8000)
-        sr = 16000
+        wave, sr = sf.read(filepath)
+        print(sr == 16000)
     waveform = torch.Tensor(np.expand_dims(wave, axis=0))
     return [waveform, sr]
 
