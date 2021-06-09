@@ -6,7 +6,7 @@ import json
 import shutil
 import numpy as np
 from model import *
-from dataset import ASVspoof2019, LibriGenuine
+from dataset import *
 from torch.utils.data import DataLoader
 from evaluate_tDCF_asvspoof19 import compute_eer_and_tdcf
 from loss import *
@@ -46,11 +46,11 @@ def initParams():
                         help="how to pad short utterance")
     parser.add_argument("--enc_dim", type=int, help="encoding dimension", default=256)
 
-    parser.add_argument('-m', '--model', help='Model arch', default='resnet',
+    parser.add_argument('-m', '--model', help='Model arch', default='lcnn',
                         choices=['cnn', 'resnet', 'lcnn', 'tdnn', 'lstm', 'rnn', 'cnn_lstm'])
 
     # Training hyperparameters
-    parser.add_argument('--num_epochs', type=int, default=1000, help="Number of epochs for training")
+    parser.add_argument('--num_epochs', type=int, default=200, help="Number of epochs for training")
     parser.add_argument('--batch_size', type=int, default=64, help="Mini batch size for training")
     parser.add_argument('--lr', type=float, default=0.0005, help="learning rate")
     parser.add_argument('--lr_decay', type=float, default=0.5, help="decay learning rate")
@@ -77,8 +77,8 @@ def initParams():
 
     parser.add_argument('--device_adv', type=str2bool, nargs='?', const=True, default=False,
                         help="whether to use device_adversarial in training")
-    parser.add_argument('--device_aug', type=str2bool, nargs='?', const=True, default=False,
-                        help="whether to use device_augmentation in training")
+    parser.add_argument('--LA_aug', type=str2bool, nargs='?', const=True, default=False,
+                        help="whether to use LA_augmentation in training")
     parser.add_argument('--lambda_', type=float, default=0.1, help="lambda for gradient reversal layer")
     parser.add_argument('--lr_d', type=float, default=0.0001, help="learning rate")
 
@@ -161,7 +161,7 @@ def train(args):
     elif args.model == 'cnn':
         cqcc_model = ConvNet(num_classes = 2, num_nodes = 47232, enc_dim = 256).to(args.device)
     elif args.model == 'lcnn':
-        cqcc_model = LCNN(4, args.enc_dim, nclasses=2).to(args.device)
+        cqcc_model = LCNN(60, args.enc_dim, nclasses=2).to(args.device)
 
     if args.continue_training:
         cqcc_model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt')).to(args.device)
@@ -173,17 +173,13 @@ def train(args):
                                 args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
     validation_set = ASVspoof2019(args.access_type, args.path_to_features, 'dev',
                                   args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
-    if args.device_aug:
-        training_set = ASVspoof2019LA_DeviceAdversarial(path_to_features="/data2/neil/ASVspoof2019LA/",
-                                                        path_to_deviced="/dataNVME/neil/ASVspoof2019LADevice",
-                                                        part="train",
-                                                        feature=args.feat, feat_len=args.feat_len,
-                                                        pad_chop=args.pad_chop, padding=args.padding)
-        validation_set = ASVspoof2019LA_DeviceAdversarial(path_to_features="/data2/neil/ASVspoof2019LA/",
-                                                          path_to_deviced="/dataNVME/neil/ASVspoof2019LADevice",
-                                                          part="dev",
-                                                          feature=args.feat, feat_len=args.feat_len,
-                                                          pad_chop=args.pad_chop, padding=args.padding)
+    if args.LA_aug:
+        training_set = ASVspoof2021LA_aug(part="train",
+                                        feature=args.feat, feat_len=args.feat_len,
+                                        pad_chop=args.pad_chop, padding=args.padding)
+        validation_set = ASVspoof2021LA_aug(part="dev",
+                                        feature=args.feat, feat_len=args.feat_len,
+                                        pad_chop=args.pad_chop, padding=args.padding)
     if args.device_adv:
         training_set = ASVspoof2019LA_DeviceAdversarial(path_to_features="/data2/neil/ASVspoof2019LA/",
                                                         path_to_deviced="/dataNVME/neil/ASVspoof2019LADevice",
@@ -224,25 +220,8 @@ def train(args):
 
     if args.base_loss == "ce":
         criterion = nn.CrossEntropyLoss()
-    elif args.base_loss == "bce":
-        criterion = nn.BCEWithLogitsLoss()
     else:
         assert False
-
-    if args.add_loss == "center":
-        centerLoss = CenterLoss(2, args.enc_dim).to(args.device)
-        centerLoss.train()
-        center_optimzer = torch.optim.SGD(centerLoss.parameters(), lr=0.5)
-
-    if args.add_loss == "lgm":
-        lgm_loss = LGMLoss_v0(2, args.enc_dim, 1.0).to(args.device)
-        lgm_loss.train()
-        lgm_optimzer = torch.optim.SGD(lgm_loss.parameters(), lr=0.1)
-
-    if args.add_loss == "lgcl":
-        lgcl_loss = LMCL_loss(2, args.enc_dim, s=args.alpha, m=args.r_real).to(args.device)
-        lgcl_loss.train()
-        lgcl_optimzer = torch.optim.SGD(lgcl_loss.parameters(), lr=0.01)
 
     if args.add_loss == "isolate":
         iso_loss = IsolateLoss(2, args.enc_dim, r_real=args.r_real, r_fake=args.r_fake).to(args.device)
@@ -289,8 +268,7 @@ def train(args):
         correct_m, total_m, correct_c, total_c, correct_v, total_v = 0, 0, 0, 0, 0, 0
 
         for i, (cqcc, audio_fn, tags, labels, channel) in enumerate(tqdm(trainDataLoader)):
-            if args.device_adv or args.device_aug:
-                if i > int(len(training_set) / args.batch_size / (len(training_set.devices) + 1)): break
+            # if i > 2: break
             cqcc = cqcc.transpose(2,3).to(args.device)
 
             if args.add_genuine:
@@ -325,18 +303,6 @@ def train(args):
                 cqcc_optimizer.zero_grad()
                 cqcc_loss.backward()
                 cqcc_optimizer.step()
-
-            if args.add_loss == "center":
-                centerloss = centerLoss(feats, labels)
-                cqcc_loss += centerloss * args.weight_loss
-                cqcc_optimizer.zero_grad()
-                center_optimzer.zero_grad()
-                trainlossDict[args.add_loss].append(cqcc_loss.item())
-                cqcc_loss.backward()
-                cqcc_optimizer.step()
-                # for param in centerLoss.parameters():
-                #     param.grad.data *= (1. / args.weight_loss)
-                center_optimzer.step()
 
             if args.add_loss in ["isolate", "iso_sq"]:
                 isoloss = iso_loss(feats, labels)
@@ -436,8 +402,7 @@ def train(args):
             # with trange(len(valDataLoader)) as v:
             #     for i in v:
             for i, (cqcc, audio_fn, tags, labels, channel) in enumerate(tqdm(valDataLoader)):
-                if args.device_adv or args.device_aug:
-                    if i > int(len(validation_set) / args.batch_size / (len(validation_set.devices) + 1)): break
+                # if i > 2: break
                 cqcc = cqcc.transpose(2,3).to(args.device)
 
                 if args.ratio < 1:
@@ -532,7 +497,8 @@ def train(args):
         if args.test_on_eval:
             with torch.no_grad():
                 ip1_loader, tag_loader, idx_loader, score_loader = [], [], [], []
-                for i, (cqcc, audio_fn, tags, labels, channel) in enumerate(tqdm(testDataLoader)):
+                for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(testDataLoader)):
+                    # if i > 2: break
                     cqcc = cqcc.transpose(2,3).to(args.device)
                     tags = tags.to(args.device)
                     labels = labels.to(args.device)
@@ -671,7 +637,7 @@ if __name__ == "__main__":
     #     # res_file.write('\nTrain EER: %8.5f min-tDCF: %8.5f\n' % (TReer_cm, TRmin_tDCF))
     #     # res_file.write('\nVal EER: %8.5f min-tDCF: %8.5f\n' % (VAeer_cm, VAmin_tDCF))
     #     res_file.write('\nTest EER: %8.5f min-tDCF: %8.5f\n' % (TEeer_cm, TEmin_tDCF))
-    plot_loss(args)
+    # plot_loss(args)
 
     # # Test a checkpoint model
     # args = initParams()
