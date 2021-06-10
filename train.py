@@ -242,7 +242,7 @@ def train(args):
 
     ###
     if args.add_loss == "p2sgrad_mse":
-        p2sgrad_loss = P2SGradLoss(input_dim=args.enc_dim, class_num=2).to(args.device)
+        p2sgrad_loss = P2SGradLoss(input_dim=args.enc_dim, out_dim=2, smooth=0.0).to(args.device)
         p2sgrad_loss.train()
         p2sgrad_optimzer = torch.optim.SGD(p2sgrad_loss.parameters(), lr=args.lr)
 
