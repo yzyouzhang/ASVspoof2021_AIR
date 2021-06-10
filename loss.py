@@ -427,7 +427,7 @@ class P2SGradLoss(nn.Module):
         # MSE between \cos\theta and one-hot vectors
         loss = self.m_loss(cos_theta, index)
 
-        return loss
+        return loss, cos_theta
 
 if __name__ == "__main__":
     # feats = torch.randn((32, 90)).cuda()

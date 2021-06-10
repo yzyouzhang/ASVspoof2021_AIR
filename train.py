@@ -394,7 +394,7 @@ def train(args):
                 lgcl_optimzer.step()
 
             if args.add_loss == "p2sgrad_mse":
-                cqcc_loss = p2sgrad_loss(feats, labels)
+                cqcc_loss, _ = p2sgrad_loss(feats, labels)
                 trainlossDict[args.add_loss].append(cqcc_loss.item())
                 cqcc_optimizer.zero_grad()
                 p2sgrad_optimzer.zero_grad()
@@ -510,7 +510,7 @@ def train(args):
                         ang_isoloss, score = ang_iso(feats, labels)
                         devlossDict[args.add_loss].append(ang_isoloss.item())
                 elif args.add_loss == 'p2sgrad_mse':
-                    cqcc_loss = p2sgrad_loss(feats, labels)
+                    cqcc_loss, score = p2sgrad_loss(feats, labels)
                     devlossDict[args.add_loss].append(cqcc_loss.item())
 
                 if args.model == "subband":
