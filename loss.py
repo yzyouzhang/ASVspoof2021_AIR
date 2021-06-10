@@ -361,15 +361,24 @@ class P2SGradLoss(nn.Module):
 
       loss.backward()
     """
-    def __init__(self, in_dim, out_dim):
-        super(P2SActivationLayer, self).__init__()
+    def __init__(self, in_dim, out_dim, smooth=0.1):
+        super(P2SGradLoss, self).__init__()
         self.in_dim = in_dim
         self.out_dim = out_dim
+        self.smooth = smooth
         
         self.weight = Parameter(torch.Tensor(in_dim, out_dim))
         self.weight.data.uniform_(-1, 1).renorm_(2,1,1e-5).mul_(1e5)
 
         self.m_loss = nn.MSELoss()
+
+    def smooth_labels(self, labels):
+        factor = self.smooth
+
+        # smooth the labels
+        labels *= (1 - factor)
+        labels += (factor / labels.shape[1])
+        return labels
 
     def forward(self, input_feat, target):
         """
@@ -413,6 +422,7 @@ class P2SGradLoss(nn.Module):
             index = torch.zeros_like(cos_theta)
             # index[i][target[i][j]] = 1
             index.scatter_(1, target.data.view(-1, 1), 1)
+            index = self.smooth_labels(index)
     
         # MSE between \cos\theta and one-hot vectors
         loss = self.m_loss(cos_theta, index)
@@ -443,7 +453,7 @@ if __name__ == "__main__":
     feat_dim = 16
     feats = torch.randn((32, feat_dim))
     labels = torch.cat((torch.Tensor([0]).repeat(10),
-                        torch.Tensor([1]).repeat(22)), 0).cuda()
-    aisoloss = AngularIsoLoss(feat_dim=feat_dim)
+                        torch.Tensor([1]).repeat(22)), 0)
+    aisoloss = P2SGradLoss(in_dim=feat_dim, out_dim=2)
     loss = aisoloss(feats, labels)
     print(loss)
