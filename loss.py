@@ -115,6 +115,8 @@ class AngularIsoLoss(nn.Module):
 
         loss = self.softplus(self.alpha * scores).mean()
 
+        # print(output_scores.squeeze(1).shape)
+
         return loss, -output_scores.squeeze(1)
 
 class IsolateLoss(nn.Module):
@@ -300,6 +302,8 @@ class OCSoftmax(nn.Module):
 
         loss = self.softplus(self.alpha * scores).mean()
 
+        print(output_scores.squeeze(1).shape)
+
         return loss, -output_scores.squeeze(1)
 
 class AMSoftmax(nn.Module):
@@ -325,6 +329,7 @@ class AMSoftmax(nn.Module):
         y_onehot = Variable(y_onehot).cuda()
         y_onehot.scatter_(1, torch.unsqueeze(label, dim=-1), self.m)
         margin_logits = self.s * (logits - y_onehot)
+        # print(margin_logits.shape)
 
         return logits, margin_logits
 
@@ -426,8 +431,8 @@ class P2SGradLoss(nn.Module):
     
         # MSE between \cos\theta and one-hot vectors
         loss = self.m_loss(cos_theta, index)
-
-        return loss, cos_theta
+        # print(cos_theta[:, 0].shape)
+        return loss, cos_theta[:, 0]
 
 if __name__ == "__main__":
     # feats = torch.randn((32, 90)).cuda()

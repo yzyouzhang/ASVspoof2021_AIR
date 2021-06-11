@@ -130,30 +130,30 @@ device = torch.device("cuda" if cuda else "cpu")
 #     print("Done!")
 
 
-# asvspoof2021_raw = dataset.ASVspoof2021evalRaw("/data2/neil/ASVspoof2021/ASVspoof2021_DF_eval/flac")
-# target_dir = os.path.join("/dataNVME/neil/ASVspoof2021DFFeatures", "LFCC")
-# lfcc = LFCC(320, 160, 512, 16000, 20, with_energy=False)
-# lfcc = lfcc.to(device)
-# for idx in tqdm(range(20500, len(asvspoof2021_raw))):
-#     waveform, filename = asvspoof2021_raw[idx]
-#     waveform = waveform.to(device)
-#     lfccOfWav = lfcc(waveform)
-#     torch.save(lfccOfWav, os.path.join(target_dir, "%06d_%s.pt" % (idx, filename)))
-# print("Done!")
+asvspoof2021_raw = dataset.ASVspoof2021evalRaw("/data2/neil/ASVspoof2021/ASVspoof2021_DF_eval/flac")
+target_dir = os.path.join("/dataNVME/neil/ASVspoof2021DFFeatures", "LFCC")
+lfcc = LFCC(320, 160, 512, 16000, 20, with_energy=False)
+lfcc = lfcc.to(device)
+for idx in tqdm(len(asvspoof2021_raw)):
+# for idx in tqdm(list(range(20503, 20505))+list(range(20500+64202, 20500+64204))+list(range(20500+481274, 20500+481276))):
+    waveform, filename = asvspoof2021_raw[idx]
+    waveform = waveform.to(device)
+    lfccOfWav = lfcc(waveform)
+    torch.save(lfccOfWav, os.path.join(target_dir, "%06d_%s.pt" % (idx, filename)))
+print("Done!")
 
 
-# # for part_ in ["train", "dev"]:
-for part_ in ["dev"]:
-    asvspoof2021Raw_LA_aug = dataset.ASVspoof2019LARaw_withTransmission(part=part_)
-    target_dir = os.path.join("/dataNVME/neil/ASVspoof2019LA_augFeatures", part_, "LFCC")
-    lfcc = LFCC(320, 160, 512, 16000, 20, with_energy=False)
-    lfcc = lfcc.to(device)
-    for idx in tqdm(range(520193, len(asvspoof2021Raw_LA_aug))):
-        try:
-            waveform, filename, tag, label, channel = asvspoof2021Raw_LA_aug[idx]
-            waveform = waveform.to(device)
-            lfccOfWav = lfcc(waveform)
-            torch.save(lfccOfWav, os.path.join(target_dir, "%06d_%s_%s_%s_%s.pt" % (idx, filename, tag, label, channel)))
-        except:
-            print(idx)
-    print("Done!")
+# for part_ in ["train", "dev"]:
+#     asvspoof2021Raw_LA_aug = dataset.ASVspoof2019LARaw_withTransmission(part=part_)
+#     target_dir = os.path.join("/dataNVME/neil/ASVspoof2019LA_augFeatures", part_, "LFCC")
+#     lfcc = LFCC(320, 160, 512, 16000, 20, with_energy=False)
+#     lfcc = lfcc.to(device)
+#     for idx in tqdm(range(520193, len(asvspoof2021Raw_LA_aug))):
+#         try:
+#             waveform, filename, tag, label, channel = asvspoof2021Raw_LA_aug[idx]
+#             waveform = waveform.to(device)
+#             lfccOfWav = lfcc(waveform)
+#             torch.save(lfccOfWav, os.path.join(target_dir, "%06d_%s_%s_%s_%s.pt" % (idx, filename, tag, label, channel)))
+#         except:
+#             print(idx)
+#     print("Done!")

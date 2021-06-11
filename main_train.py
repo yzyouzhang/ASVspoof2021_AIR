@@ -48,14 +48,14 @@ def initParams():
     parser.add_argument("--enc_dim", type=int, help="encoding dimension", default=256)
 
     parser.add_argument('-m', '--model', help='Model arch', default='lcnn',
-                        choices=['cnn', 'resnet', 'lcnn', 'tdnn', 'lstm', 'rnn', 'cnn_lstm'])
+                        choices=['cnn', 'resnet', 'lcnn', 'tdnn', 'lstm', 'rnn', 'cnn_lstm', 'res2net'])
 
     # Training hyperparameters
     parser.add_argument('--num_epochs', type=int, default=200, help="Number of epochs for training")
     parser.add_argument('--batch_size', type=int, default=64, help="Mini batch size for training")
-    parser.add_argument('--lr', type=float, default=0.0005, help="learning rate")
+    parser.add_argument('--lr', type=float, default=0.001, help="learning rate")
     parser.add_argument('--lr_decay', type=float, default=0.7, help="decay learning rate")
-    parser.add_argument('--interval', type=int, default=50, help="interval to decay lr")
+    parser.add_argument('--interval', type=int, default=30, help="interval to decay lr")
 
     parser.add_argument('--beta_1', type=float, default=0.9, help="bata_1 for Adam")
     parser.add_argument('--beta_2', type=float, default=0.999, help="beta_2 for Adam")
@@ -65,7 +65,7 @@ def initParams():
 
     parser.add_argument('--base_loss', type=str, default="ce", choices=["ce", "bce"], help="use which loss for basic training")
     parser.add_argument('--add_loss', type=str, default=None,
-                        choices=[None, 'center', 'lgm', 'lgcl', 'isolate', 'iso_sq', 'ang_iso', 'multi_isolate', 'multicenter_isolate'], help="add other loss for one-class training")
+                        choices=[None, 'center', 'lgm', 'lgcl', 'isolate', 'iso_sq', 'ang_iso', 'multi_isolate', 'multicenter_isolate', 'p2sgrad'], help="add other loss for one-class training")
     parser.add_argument('--weight_loss', type=float, default=1, help="weight for other loss")
     parser.add_argument('--r_real', type=float, default=0.9, help="r_real for isolate loss")
     parser.add_argument('--r_fake', type=float, default=0.2, help="r_fake for isolate loss")
@@ -84,7 +84,6 @@ def initParams():
     parser.add_argument('--lr_d', type=float, default=0.0001, help="learning rate")
 
     parser.add_argument('--pre_train', action='store_true', help="whether to pretrain the model")
-    parser.add_argument('--add_genuine', action='store_true', help="whether to iterate through genuine part multiple times")
     parser.add_argument('--test_on_eval', action='store_true',
                         help="whether to run EER on the evaluation set")
 
@@ -163,6 +162,8 @@ def train(args):
         cqcc_model = ConvNet(num_classes = 2, num_nodes = 47232, enc_dim = 256).to(args.device)
     elif args.model == 'lcnn':
         cqcc_model = LCNN(60, args.enc_dim, nclasses=2).to(args.device)
+    elif args.model == 'res2net':
+        cqcc_model = Res2Net(SEBottle2neck, [3, 4, 6, 3], baseWidth=26, scale=4, pretrained=False, num_classes=2).to(args.device)
 
     if args.continue_training:
         cqcc_model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt')).to(args.device)
@@ -213,12 +214,6 @@ def train(args):
     valOri_flow = iter(valOriDataLoader)
     valAug_flow = iter(valAugDataLoader)
 
-    if args.add_genuine:
-        training_genuine = ASVspoof2019(args.access_type, args.path_to_features, 'train',
-                                        args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding, genuine_only=True)
-        trainGenDataLoader = DataLoader(training_genuine, batch_size=int(args.batch_size * args.ratio), shuffle=True,
-                                        num_workers=args.num_workers, collate_fn=training_genuine.collate_fn)
-
     test_set = ASVspoof2019(args.access_type, args.path_to_features, "eval", args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
     testDataLoader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, collate_fn=test_set.collate_fn)
 
@@ -249,6 +244,11 @@ def train(args):
         ang_iso.train()
         ang_iso_optimzer = torch.optim.SGD(ang_iso.parameters(), lr=args.lr)
 
+    if args.add_loss == "p2sgrad":
+        p2sgrad_loss = P2SGradLoss(in_dim=args.enc_dim, out_dim=2, smooth=0.0).to(args.device)
+        p2sgrad_loss.train()
+        p2sgrad_optimzer = torch.optim.SGD(p2sgrad_loss.parameters(), lr=args.lr)
+
     early_stop_cnt = 0
     prev_loss = 1e8
     add_size = args.batch_size - int(args.batch_size * args.ratio)
@@ -269,6 +269,8 @@ def train(args):
             adjust_learning_rate(args, args.lr, iso_optimzer, epoch_num)
         if args.add_loss == "ang_iso":
             adjust_learning_rate(args, args.lr, ang_iso_optimzer, epoch_num)
+        if args.add_loss == "p2sgrad":
+            adjust_learning_rate(args, args.lr, p2sgrad_optimzer, epoch_num)
         if args.device_adv:
             adjust_learning_rate(args, args.lr_d, classifier_optimizer, epoch_num)
         print('\nEpoch: %d ' % (epoch_num + 1))
@@ -353,6 +355,15 @@ def train(args):
                 cqcc_loss.backward()
                 cqcc_optimizer.step()
                 ang_iso_optimzer.step()
+
+            if args.add_loss == "p2sgrad":
+                cqcc_loss, _ = p2sgrad_loss(feats, labels)
+                trainlossDict[args.add_loss].append(cqcc_loss.item())
+                cqcc_optimizer.zero_grad()
+                p2sgrad_optimzer.zero_grad()
+                cqcc_loss.backward()
+                cqcc_optimizer.step()
+                p2sgrad_optimzer.step()
 
             if args.device_adv:
                 channel = channel.to(args.device)
@@ -483,6 +494,9 @@ def train(args):
                         correct_v += (predicted == channel).sum().item()
                         device_loss = criterion(classifier_out, channel)
                         devlossDict["adv_loss"].append(device_loss.item())
+                elif args.add_loss == 'p2sgrad':
+                    cqcc_loss, score = p2sgrad_loss(feats, labels)
+                    devlossDict[args.add_loss].append(cqcc_loss.item())
 
                 score_loader.append(score)
 
@@ -561,12 +575,9 @@ def train(args):
                     elif args.add_loss == "ang_iso":
                         ang_isoloss, score = ang_iso(feats, labels)
                         testlossDict[args.add_loss].append(ang_isoloss.item())
-                    elif args.add_loss == "multi_isolate":
-                        multi_isoloss = multi_iso_loss(feats, labels)
-                        testlossDict[args.add_loss].append(multi_isoloss.item())
-                    elif args.add_loss == "multicenter_isolate":
-                        multiisoloss = multicenter_iso_loss(feats, labels)
-                        testlossDict[args.add_loss].append(multiisoloss.item())
+                    elif args.add_loss == 'p2sgrad':
+                        p2s_loss, score = p2sgrad_loss(feats, labels)
+                        testlossDict[args.add_loss].append(p2s_loss.item())
 
                     score_loader.append(score)
 
