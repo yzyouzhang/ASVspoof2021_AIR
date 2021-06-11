@@ -204,8 +204,14 @@ def train(args):
     trainOri_flow = iter(trainOriDataLoader)
     trainAug_flow = iter(trainAugDataLoader)
 
-    valDataLoader = DataLoader(validation_set, batch_size=args.batch_size,
-                               shuffle=True, num_workers=args.num_workers, collate_fn=validation_set.collate_fn)
+    valOriDataLoader = DataLoader(validation_set, batch_size=int(args.batch_size * args.ratio),
+                                    shuffle=False, num_workers=args.num_workers,
+                                    sampler=torch_sampler.SubsetRandomSampler(range(24844)))
+    valAugDataLoader = DataLoader(validation_set, batch_size=args.batch_size - int(args.batch_size * args.ratio),
+                                    shuffle=False, num_workers=args.num_workers,
+                                    sampler=torch_sampler.SubsetRandomSampler(range(24844, len(validation_set))))
+    valOri_flow = iter(valOriDataLoader)
+    valAug_flow = iter(valAugDataLoader)
 
     if args.add_genuine:
         training_genuine = ASVspoof2019(args.access_type, args.path_to_features, 'train',
@@ -269,8 +275,18 @@ def train(args):
         correct_m, total_m, correct_c, total_c, correct_v, total_v = 0, 0, 0, 0, 0, 0
 
         for i in trange(0, len(trainOriDataLoader), total=len(trainOriDataLoader), initial=0):
-            cqccOri, audio_fnOri, tagsOri, labelsOri, channelsOri = next(trainOri_flow)
-            cqccAug, audio_fnAug, tagsAug, labelsAug, channelsAug = next(trainAug_flow)
+            try:
+                cqccOri, audio_fnOri, tagsOri, labelsOri, channelsOri = next(trainOri_flow)
+            except StopIteration:
+                trainOri_flow = iter(trainOriDataLoader)
+                cqccOri, audio_fnOri, tagsOri, labelsOri, channelsOri = next(trainOri_flow)
+
+            try:
+                cqccAug, audio_fnAug, tagsAug, labelsAug, channelsAug = next(trainAug_flow)
+            except StopIteration:
+                trainAug_flow = iter(trainAugDataLoader)
+                cqccAug, audio_fnAug, tagsAug, labelsAug, channelsAug = next(trainAug_flow)
+
             cqcc = torch.cat((cqccOri, cqccAug), 0)
             tags = torch.cat((tagsOri, tagsAug), 0)
             labels = torch.cat((labelsOri, labelsAug), 0)
@@ -403,7 +419,24 @@ def train(args):
             # with trange(2) as v:
             # with trange(len(valDataLoader)) as v:
             #     for i in v:
-            for i, (cqcc, audio_fn, tags, labels, channel) in enumerate(tqdm(valDataLoader)):
+            for i in trange(0, len(valOriDataLoader), total=len(valOriDataLoader), initial=0):
+                try:
+                    cqccOri, audio_fnOri, tagsOri, labelsOri, channelsOri = next(valOri_flow)
+                except StopIteration:
+                    valOri_flow = iter(valOriDataLoader)
+                    cqccOri, audio_fnOri, tagsOri, labelsOri, channelsOri = next(valOri_flow)
+
+                try:
+                    cqccAug, audio_fnAug, tagsAug, labelsAug, channelsAug = next(valAug_flow)
+                except StopIteration:
+                    valAug_flow = iter(valAugDataLoader)
+                    cqccAug, audio_fnAug, tagsAug, labelsAug, channelsAug = next(valAug_flow)
+
+                cqcc = torch.cat((cqccOri, cqccAug), 0)
+                tags = torch.cat((tagsOri, tagsAug), 0)
+                labels = torch.cat((labelsOri, labelsAug), 0)
+                channels = channelsOri + channelsAug
+
                 # if i > 2: break
                 cqcc = cqcc.transpose(2,3).to(args.device)
 
