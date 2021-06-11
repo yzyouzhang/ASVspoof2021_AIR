@@ -48,10 +48,10 @@ def test_on_ASVspoof2021(feat_model_path, loss_model_path, part, add_loss, add_e
 if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"] = "2"
     device = torch.device("cuda")
-    model_dir = "/data/neil/antiRes/models1028/ocsoftmax"
+    # model_dir = "/data/neil/antiRes/models1028/ocsoftmax"
     # model_dir = "/data/analyse/channel0321/aug"
-    # model_dir = "/data/analyse/channel0321/adv_0.001"
+    model_dir = "/data/analyse/channel0321/adv_0.001"
     # model_dir = "/data/neil/asv2021/models0609/LFCC+LCNN+OCSoftmax+LAaug"
-    model_path = os.path.join(model_dir, "anti-spoofing_lfcc_model.pt")
+    model_path = os.path.join(model_dir, "anti-spoofing_cqcc_model.pt")
     loss_model_path = os.path.join(model_dir, "anti-spoofing_loss_model.pt")
     test_on_ASVspoof2021(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=False)

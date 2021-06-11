@@ -302,7 +302,7 @@ class OCSoftmax(nn.Module):
 
         loss = self.softplus(self.alpha * scores).mean()
 
-        print(output_scores.squeeze(1).shape)
+        # print(output_scores.squeeze(1).shape)
 
         return loss, -output_scores.squeeze(1)
 
