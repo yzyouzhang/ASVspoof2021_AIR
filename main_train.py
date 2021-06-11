@@ -8,6 +8,7 @@ import numpy as np
 from model import *
 from dataset import *
 from torch.utils.data import DataLoader
+import torch.utils.data.sampler as torch_sampler
 from evaluate_tDCF_asvspoof19 import compute_eer_and_tdcf
 from loss import *
 from collections import defaultdict
@@ -34,8 +35,8 @@ def initParams():
     parser.add_argument("-e", "--path_to_external", type=str, help="external data for training",
                         default="/dataNVME/neil/libriTTS/train-clean-360")
 
-    parser.add_argument("--ratio", type=float, default=1,
-                        help="ASVspoof ratio in a training batch, the other should be external genuine speech")
+    parser.add_argument("--ratio", type=float, default=0.5,
+                        help="ASVspoof ratio in a training batch, the other should be augmented")
 
     # Dataset prepare
     parser.add_argument("--feat", type=str, help="which feature to use", default='LFCC',
@@ -53,8 +54,8 @@ def initParams():
     parser.add_argument('--num_epochs', type=int, default=200, help="Number of epochs for training")
     parser.add_argument('--batch_size', type=int, default=64, help="Mini batch size for training")
     parser.add_argument('--lr', type=float, default=0.0005, help="learning rate")
-    parser.add_argument('--lr_decay', type=float, default=0.5, help="decay learning rate")
-    parser.add_argument('--interval', type=int, default=100, help="interval to decay lr")
+    parser.add_argument('--lr_decay', type=float, default=0.7, help="decay learning rate")
+    parser.add_argument('--interval', type=int, default=50, help="interval to decay lr")
 
     parser.add_argument('--beta_1', type=float, default=0.9, help="bata_1 for Adam")
     parser.add_argument('--beta_2', type=float, default=0.999, help="beta_2 for Adam")
@@ -194,8 +195,15 @@ def train(args):
                                                           part="dev",
                                                           feature=args.feat, feat_len=args.feat_len,
                                                           pad_chop=args.pad_chop, padding=args.padding)
-    trainDataLoader = DataLoader(training_set, batch_size=int(args.batch_size * args.ratio),
-                                 shuffle=True, num_workers=args.num_workers, collate_fn=training_set.collate_fn)
+    trainOriDataLoader = DataLoader(training_set, batch_size=int(args.batch_size * args.ratio),
+                                    shuffle=False, num_workers=args.num_workers,
+                                    sampler=torch_sampler.SubsetRandomSampler(range(25380)))
+    trainAugDataLoader = DataLoader(training_set, batch_size=args.batch_size - int(args.batch_size * args.ratio),
+                                    shuffle=False, num_workers=args.num_workers,
+                                    sampler=torch_sampler.SubsetRandomSampler(range(25380, len(training_set))))
+    trainOri_flow = iter(trainOriDataLoader)
+    trainAug_flow = iter(trainAugDataLoader)
+
     valDataLoader = DataLoader(validation_set, batch_size=args.batch_size,
                                shuffle=True, num_workers=args.num_workers, collate_fn=validation_set.collate_fn)
 
@@ -204,14 +212,7 @@ def train(args):
                                         args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding, genuine_only=True)
         trainGenDataLoader = DataLoader(training_genuine, batch_size=int(args.batch_size * args.ratio), shuffle=True,
                                         num_workers=args.num_workers, collate_fn=training_genuine.collate_fn)
-    if args.ratio < 1:
-        libri_set_train = LibriGenuine(args.path_to_external, part="train", feature=args.feat, feat_len=args.feat_len, padding=args.padding)
-        libri_set_dev = LibriGenuine(args.path_to_external, part="dev", feature=args.feat, feat_len=args.feat_len, padding=args.padding)
 
-        libriDataLoader_train = DataLoader(libri_set_train, batch_size=(args.batch_size - int(args.batch_size * args.ratio)),
-                                           shuffle=True, num_workers=args.num_workers)
-        libriDataLoader_dev = DataLoader(libri_set_dev, batch_size=(args.batch_size - int(args.batch_size * args.ratio)),
-                                           shuffle=True, num_workers=args.num_workers)
     test_set = ASVspoof2019(args.access_type, args.path_to_features, "eval", args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
     testDataLoader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, collate_fn=test_set.collate_fn)
 
@@ -267,21 +268,22 @@ def train(args):
         print('\nEpoch: %d ' % (epoch_num + 1))
         correct_m, total_m, correct_c, total_c, correct_v, total_v = 0, 0, 0, 0, 0, 0
 
-        for i, (cqcc, audio_fn, tags, labels, channel) in enumerate(tqdm(trainDataLoader)):
+        for i in trange(0, len(trainOriDataLoader), total=len(trainOriDataLoader), initial=0):
+            cqccOri, audio_fnOri, tagsOri, labelsOri, channelsOri = next(trainOri_flow)
+            cqccAug, audio_fnAug, tagsAug, labelsAug, channelsAug = next(trainAug_flow)
+            cqcc = torch.cat((cqccOri, cqccAug), 0)
+            tags = torch.cat((tagsOri, tagsAug), 0)
+            labels = torch.cat((labelsOri, labelsAug), 0)
+            channels = channelsOri + channelsAug
+
+            # count = 0
+            # for channel in list(channels):
+            #     if channel == "no_channel":
+            #         count += 1
+            # print(count / 64)
+
             # if i > 2: break
             cqcc = cqcc.transpose(2,3).to(args.device)
-
-            if args.add_genuine:
-                featTensor, _, _, _ = next(iter(trainGenDataLoader))
-                cqcc = torch.cat((cqcc, featTensor.transpose(2, 3)), 0)
-                tags = torch.cat((tags, torch.zeros(add_size, dtype=tags.dtype)), 0)
-                labels = torch.cat((labels, torch.zeros(add_size, dtype=labels.dtype)), 0)
-
-            if args.ratio < 1:
-                featTensor, _, _ = next(iter(libriDataLoader_train))
-                cqcc = torch.cat((cqcc, featTensor.transpose(2,3)), 0)
-                tags = torch.cat((tags, torch.zeros(add_size, dtype=tags.dtype)), 0)
-                labels = torch.cat((labels, torch.zeros(add_size, dtype=labels.dtype)), 0)
 
             tags = tags.to(args.device)
             labels = labels.to(args.device)
@@ -404,12 +406,6 @@ def train(args):
             for i, (cqcc, audio_fn, tags, labels, channel) in enumerate(tqdm(valDataLoader)):
                 # if i > 2: break
                 cqcc = cqcc.transpose(2,3).to(args.device)
-
-                if args.ratio < 1:
-                    featTensor, _, _ = next(iter(libriDataLoader_dev))
-                    cqcc = torch.cat((cqcc, featTensor.transpose(2, 3)), 0)
-                    tags = torch.cat((tags, torch.zeros(add_size, dtype=tags.dtype)), 0)
-                    labels = torch.cat((labels, torch.zeros(add_size, dtype=labels.dtype)), 0)
 
                 tags = tags.to(args.device)
                 labels = labels.to(args.device)
