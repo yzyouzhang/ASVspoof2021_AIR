@@ -5,7 +5,7 @@ import os
 import json
 import shutil
 import numpy as np
-from model import ResNet, ConvNet, LCNN, Subband
+from model import ResNet, ConvNet, LCNN, Subband, Res2Net, SEBottle2neck
 from dataset import ASVspoof2019, LibriGenuine
 from torch.utils.data import DataLoader
 from evaluate_tDCF_asvspoof19 import compute_eer_and_tdcf
@@ -47,7 +47,7 @@ def initParams():
     parser.add_argument("--enc_dim", type=int, help="encoding dimension", default=256)
 
     parser.add_argument('-m', '--model', help='Model arch', default='resnet',
-                        choices=['cnn', 'resnet', 'lcnn', 'tdnn', 'lstm', 'rnn', 'cnn_lstm', 'subband'])
+                        choices=['cnn', 'resnet', 'lcnn', 'tdnn', 'lstm', 'rnn', 'cnn_lstm', 'subband', 'res2net'])
 
     # Training hyperparameters
     parser.add_argument('--num_epochs', type=int, default=200, help="Number of epochs for training")
@@ -164,6 +164,11 @@ def train(args):
     elif args.model == 'subband':
         node_dict = {"CQCC": 4, "LFCC": 3, "LFBB": 3, "Melspec": 6, "LFB": 6, "CQT": 8, "STFT": 257, "MFCC": 87}
         cqcc_model = Subband(int(np.ceil(node_dict[args.feat] / args.subband_num)), args.enc_dim, num_classes=2, subband_num=args.subband_num).to(args.device)
+    elif args.model == 'res2net':
+        def se_res2net50_v1b(**kwargs):
+            model = Res2Net(SEBottle2neck, [3, 4, 6, 3], baseWidth=26, scale=4, **kwargs)
+            return model
+        cqcc_model = se_res2net50_v1b(pretrained=False, num_classes=2).to(args.device)
 
     if args.continue_training:
         cqcc_model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt')).to(args.device)
