@@ -165,6 +165,18 @@ class STFT(torch_nn.Module):
         return sp_amp
 
 
+class Melspec(torch_nn.Module):
+    """ Mel-spectrogram
+    """
+    def __init__(self, ):
+        super(Melspec, self).__init__()
+
+
+    def forward(self, x):
+
+        return None
+
+
 if __name__ == "__main__":
     lfcc = LFCC(320, 160, 512, 16000, 20, with_energy=False)
     wav, sr = librosa.load("/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_train/flac/LA_T_3727749.flac", sr=16000)

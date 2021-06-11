@@ -240,6 +240,12 @@ def train(args):
         ang_iso.train()
         ang_iso_optimzer = torch.optim.SGD(ang_iso.parameters(), lr=args.lr)
 
+    ###
+    if args.add_loss == "p2sgrad_mse":
+        p2sgrad_loss = P2SGradLoss(input_dim=args.enc_dim, out_dim=2, smooth=0.0).to(args.device)
+        p2sgrad_loss.train()
+        p2sgrad_optimzer = torch.optim.SGD(p2sgrad_loss.parameters(), lr=args.lr)
+
     if args.model == "subband":
         subb_loss_lst = []
         subb_opti_lst = []
@@ -387,6 +393,15 @@ def train(args):
                 cqcc_optimizer.step()
                 lgcl_optimzer.step()
 
+            if args.add_loss == "p2sgrad_mse":
+                cqcc_loss, _ = p2sgrad_loss(feats, labels)
+                trainlossDict[args.add_loss].append(cqcc_loss.item())
+                cqcc_optimizer.zero_grad()
+                p2sgrad_optimzer.zero_grad()
+                cqcc_loss.backward()
+                cqcc_optimizer.step()
+                p2sgrad_optimzer.step()
+
             # genuine_feats.append(feats[labels==0])
             ip1_loader.append(feats)
             idx_loader.append((labels))
@@ -494,6 +509,9 @@ def train(args):
                     else:
                         ang_isoloss, score = ang_iso(feats, labels)
                         devlossDict[args.add_loss].append(ang_isoloss.item())
+                elif args.add_loss == 'p2sgrad_mse':
+                    cqcc_loss, score = p2sgrad_loss(feats, labels)
+                    devlossDict[args.add_loss].append(cqcc_loss.item())
 
                 if args.model == "subband":
                     for k in range(args.subband_num):
@@ -579,7 +597,7 @@ def train(args):
                         cqcc_loss = criterion(cqcc_outputs, labels)
                         score = F.softmax(cqcc_outputs, dim=1)[:, 0]
                         testlossDict["base_loss"].append(cqcc_loss.item())
-                    elif args.add_loss in ["lgm", "center"]:
+                    elif args.add_loss in ["lgm", "center", "p2sgrad_mse"]:
                         testlossDict[args.add_loss].append(cqcc_loss.item())
                     elif args.add_loss == "lgcl":
                         outputs, moutputs = lgcl_loss(feats, labels)
