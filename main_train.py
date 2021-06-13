@@ -29,11 +29,9 @@ def initParams():
     parser.add_argument("-d", "--path_to_database", type=str, help="dataset path", default='/data/neil/DS_10283_3336/')
     parser.add_argument("-f", "--path_to_features", type=str, help="features path",
                         default='/data2/neil/ASVspoof2019LA/')
-    parser.add_argument("-p", "--path_to_protocol", type=str, help="protocol path",
-                        default='/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/')
+
     parser.add_argument("-o", "--out_fold", type=str, help="output folder", required=True, default='./models/try/')
-    parser.add_argument("-e", "--path_to_external", type=str, help="external data for training",
-                        default="/dataNVME/neil/libriTTS/train-clean-360")
+
 
     parser.add_argument("--ratio", type=float, default=0.5,
                         help="ASVspoof ratio in a training batch, the other should be augmented")
@@ -51,7 +49,7 @@ def initParams():
                         choices=['cnn', 'resnet', 'lcnn', 'tdnn', 'lstm', 'rnn', 'cnn_lstm', 'res2net'])
 
     # Training hyperparameters
-    parser.add_argument('--num_epochs', type=int, default=200, help="Number of epochs for training")
+    parser.add_argument('--num_epochs', type=int, default=300, help="Number of epochs for training")
     parser.add_argument('--batch_size', type=int, default=64, help="Mini batch size for training")
     parser.add_argument('--lr', type=float, default=0.001, help="learning rate")
     parser.add_argument('--lr_decay', type=float, default=0.7, help="decay learning rate")
@@ -623,6 +621,10 @@ def train(args):
                 loss_model = lgcl_loss
                 torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
                                                     'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
+            elif args.add_loss == "p2sgrad":
+                loss_model = p2sgrad_loss
+                torch.save(p2sgrad_loss, os.path.join(args.out_fold, 'checkpoint',
+                                                    'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
             else:
                 loss_model = None
 
@@ -641,6 +643,9 @@ def train(args):
             elif args.add_loss == "lgcl":
                 loss_model = lgcl_loss
                 torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
+            elif args.add_loss == "p2sgrad":
+                loss_model = p2sgrad_loss
+                torch.save(p2sgrad_loss, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
             else:
                 loss_model = None
             prev_loss = valLoss

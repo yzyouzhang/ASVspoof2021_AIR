@@ -5,7 +5,7 @@ import torch
 import os
 from tqdm import tqdm
 
-def test_on_ASVspoof2021(feat_model_path, loss_model_path, part, add_loss, add_external_genuine=False):
+def test_on_ASVspoof2021(feat_model_path, loss_model_path, part, add_loss):
     dirname = os.path.dirname
     basename = os.path.splitext(os.path.basename(feat_model_path))[0]
     if "checkpoint" in dirname(feat_model_path):
@@ -19,7 +19,7 @@ def test_on_ASVspoof2021(feat_model_path, loss_model_path, part, add_loss, add_e
 
     # test_set = ASVspoof2021LAeval(pad_chop=True)
     test_set = ASVspoof2021DFeval(pad_chop=True)
-    testDataLoader = DataLoader(test_set, batch_size=16, shuffle=False, num_workers=0)
+    testDataLoader = DataLoader(test_set, batch_size=8, shuffle=False, num_workers=0)
     model.eval()
 
     with open(os.path.join(dir_path, 'score.txt'), 'w') as cm_score_file:
@@ -38,6 +38,9 @@ def test_on_ASVspoof2021(feat_model_path, loss_model_path, part, add_loss, add_e
             elif add_loss == "amsoftmax":
                 outputs, moutputs = loss_model(feats, labels)
                 score = F.softmax(outputs, dim=1)[:, 0]
+            elif add_loss == "p2sgrad":
+                outputs, score = loss_model(feats, labels)
+                # score = F.softmax(outputs, dim=1)[:, 0]
             else: pass
 
             for j in range(labels.size(0)):
@@ -50,8 +53,8 @@ if __name__ == "__main__":
     device = torch.device("cuda")
     # model_dir = "/data/neil/antiRes/models1028/ocsoftmax"
     # model_dir = "/data/analyse/channel0321/aug"
-    model_dir = "/data/analyse/channel0321/adv_0.001"
-    # model_dir = "/data/neil/asv2021/models0609/LFCC+LCNN+OCSoftmax+LAaug"
+    # model_dir = "/data/analyse/channel0321/adv_0.001"
+    model_dir = "/data/neil/asv2021/models0609/LFCC+LCNN+P2SGrad+LAaug"
     model_path = os.path.join(model_dir, "anti-spoofing_cqcc_model.pt")
     loss_model_path = os.path.join(model_dir, "anti-spoofing_loss_model.pt")
-    test_on_ASVspoof2021(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=False)
+    test_on_ASVspoof2021(model_path, loss_model_path, "eval", None)
