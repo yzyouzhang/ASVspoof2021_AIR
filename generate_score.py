@@ -17,8 +17,8 @@ def test_on_ASVspoof2021(feat_model_path, loss_model_path, part, add_loss):
     # model = torch.nn.DataParallel(model, list(range(torch.cuda.device_count())))  # for multiple GPUs
     loss_model = torch.load(loss_model_path) if add_loss is not None else None
 
-    # test_set = ASVspoof2021LAeval(pad_chop=True)
-    test_set = ASVspoof2021DFeval(pad_chop=True)
+    test_set = ASVspoof2021LAeval(pad_chop=True)
+    # test_set = ASVspoof2021DFeval(pad_chop=True)
     testDataLoader = DataLoader(test_set, batch_size=8, shuffle=False, num_workers=0)
     model.eval()
 
@@ -31,7 +31,7 @@ def test_on_ASVspoof2021(feat_model_path, loss_model_path, part, add_loss):
 
             feats, lfcc_outputs = model(lfcc)
 
-            score = F.softmax(lfcc_outputs)[:, 0]
+            score = -F.softmax(lfcc_outputs)[:, 0]
 
             if add_loss == "ocsoftmax":
                 ang_isoloss, score = loss_model(feats, labels)
