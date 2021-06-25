@@ -50,7 +50,7 @@ def initParams():
                         choices=['cnn', 'resnet', 'lcnn', 'tdnn', 'lstm', 'rnn', 'cnn_lstm', 'subband', 'res2net'])
 
     # Training hyperparameters
-    parser.add_argument('--num_epochs', type=int, default=200, help="Number of epochs for training")
+    parser.add_argument('--num_epochs', type=int, default=300, help="Number of epochs for training")
     parser.add_argument('--batch_size', type=int, default=64, help="Mini batch size for training")
     parser.add_argument('--lr', type=float, default=0.0003, help="learning rate")
     parser.add_argument('--lr_decay', type=float, default=0.5, help="decay learning rate")
