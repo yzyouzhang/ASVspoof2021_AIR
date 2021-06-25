@@ -16,6 +16,7 @@ from tqdm import tqdm, trange
 import random
 from utils import *
 import eval_metrics as em
+from ecapa_tdnn import *
 
 torch.set_default_tensor_type(torch.FloatTensor)
 
@@ -46,7 +47,7 @@ def initParams():
     parser.add_argument("--enc_dim", type=int, help="encoding dimension", default=256)
 
     parser.add_argument('-m', '--model', help='Model arch', default='lcnn',
-                        choices=['cnn', 'resnet', 'lcnn', 'tdnn', 'lstm', 'rnn', 'cnn_lstm', 'res2net'])
+                        choices=['cnn', 'resnet', 'lcnn', 'tdnn', 'lstm', 'rnn', 'cnn_lstm', 'res2net', 'ecapa'])
 
     # Training hyperparameters
     parser.add_argument('--num_epochs', type=int, default=300, help="Number of epochs for training")
@@ -160,8 +161,10 @@ def train(args):
         cqcc_model = ConvNet(num_classes = 2, num_nodes = 47232, enc_dim = 256).to(args.device)
     elif args.model == 'lcnn':
         cqcc_model = LCNN(60, args.enc_dim, nclasses=2).to(args.device)
+    elif args.model == 'ecapa':
+        cqcc_model = Res2Net2(Bottle2neck, C=1024, model_scale=8, nOut=2, n_mels=60).to(args.device)
     elif args.model == 'res2net':
-        cqcc_model = Res2Net(SEBottle2neck, [3, 4, 6, 3], baseWidth=26, scale=4, pretrained=False, num_classes=2).to(args.device)
+        cqcc_model = Res2Net(SEBottle2neck, [3, 4, 6, 3], baseWidth=26, scale=4, pretrained=False, num_classes=2).to(args.device
 
     if args.continue_training:
         cqcc_model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt')).to(args.device)
@@ -307,6 +310,9 @@ def train(args):
 
             if args.ratio < 1:
                 cqcc, tags, labels = shuffle(cqcc, tags, labels)
+                
+            if args.model == 'ecapa':
+                cqcc = torch.squeeze(cqcc)
 
             feats, cqcc_outputs = cqcc_model(cqcc)
 
@@ -453,6 +459,9 @@ def train(args):
                 labels = labels.to(args.device)
 
                 cqcc, tags, labels = shuffle(cqcc, tags, labels)
+                
+                if args.model == 'ecapa':
+                    cqcc = torch.squeeze(cqcc)
 
                 feats, cqcc_outputs = cqcc_model(cqcc)
 
@@ -544,6 +553,8 @@ def train(args):
                     tags = tags.to(args.device)
                     labels = labels.to(args.device)
 
+                    if args.model == 'ecapa':
+                        cqcc = torch.squeeze(cqcc)
                     feats, cqcc_outputs = cqcc_model(cqcc)
 
                     if args.base_loss == "bce":
