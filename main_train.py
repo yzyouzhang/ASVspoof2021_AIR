@@ -16,6 +16,7 @@ from tqdm import tqdm, trange
 import random
 from utils import *
 import eval_metrics as em
+from ecapa_tdnn import *
 
 torch.set_default_tensor_type(torch.FloatTensor)
 
