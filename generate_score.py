@@ -18,7 +18,13 @@ def test_on_ASVspoof2021(feat_model_path, loss_model_path, part, add_loss):
     # model = torch.nn.DataParallel(model, list(range(torch.cuda.device_count())))  # for multiple GPUs
     loss_model = torch.load(loss_model_path) if add_loss is not None else None
 
+    ### use this one to tune the fusion weights on the original dev set
+    # test_set = ASVspoof2019("LA", "/data2/neil/ASVspoof2019LA", 'dev', "LFCC", pad_chop=True)
+    ### use this one to tune the fusion weights on the augmented dev set
+    # test_set = ASVspoof2021LA_aug(part="dev", pad_chop=True)
+    ### use this line to generate score for LA 2021 Challenge
     # test_set = ASVspoof2021LAeval(pad_chop=True)
+    ### use this line to generate score for DF 2021 Challenge
     test_set = ASVspoof2021DFeval(pad_chop=True)
     testDataLoader = DataLoader(test_set, batch_size=8, shuffle=False, num_workers=0)
     model.eval()
