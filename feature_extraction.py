@@ -171,11 +171,9 @@ class Melspec(torch_nn.Module):
     def __init__(self, ):
         super(Melspec, self).__init__()
 
-
     def forward(self, x):
-
-        return None
-
+        melspec = librosa.feature.melspectrogram(y=x, sr=sr, n_fft=512, hop_length=128)
+        return torch.from_numpy(melspec)
 
 if __name__ == "__main__":
     lfcc = LFCC(320, 160, 512, 16000, 20, with_energy=False)

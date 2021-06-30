@@ -174,16 +174,15 @@ device = torch.device("cuda" if cuda else "cpu")
 #     print("Done!")
 
 # for part_ in ["train", "dev"]:
-for part_ in ["dev"]:
-    asvspoof2021Raw_LA_aug = dataset.ASVspoof2019LARaw_withTransmission(part=part_)
-    target_dir = os.path.join("/dataNVME/neil/ASVspoof2019LA_augFeatures", part_, "Raw")
-    for idx in tqdm(range(444200, len(asvspoof2021Raw_LA_aug))):
-        # try:
-        waveform, filename, tag, label, channel = asvspoof2021Raw_LA_aug[idx]
-        torch.save(waveform, os.path.join(target_dir, "%06d_%s_%s_%s_%s.pt" % (idx, filename, tag, label, channel)))
-        # except:
-        #     print(idx)
-    print("Done!")
+#     asvspoof2021Raw_LA_aug = dataset.ASVspoof2019LARaw_withTransmission(part=part_)
+#     target_dir = os.path.join("/dataNVME/neil/ASVspoof2019LA_augFeatures", part_, "Raw")
+#     for idx in tqdm(range(444200, len(asvspoof2021Raw_LA_aug))):
+#         # try:
+#         waveform, filename, tag, label, channel = asvspoof2021Raw_LA_aug[idx]
+#         torch.save(waveform, os.path.join(target_dir, "%06d_%s_%s_%s_%s.pt" % (idx, filename, tag, label, channel)))
+#         # except:
+#         #     print(idx)
+#     print("Done!")
 
 
 # asvspoof2021_raw = dataset.ASVspoof2021evalRaw("/data2/neil/ASVspoof2021/ASVspoof2021_LA_eval/flac")
