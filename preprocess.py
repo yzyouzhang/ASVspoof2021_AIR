@@ -1,5 +1,5 @@
 import raw_dataset as dataset
-from feature_extraction import LFCC, STFT
+from feature_extraction import *
 import os
 import torch
 from tqdm import tqdm
@@ -173,32 +173,43 @@ device = torch.device("cuda" if cuda else "cpu")
 #             print(idx)
 #     print("Done!")
 
-# for part_ in ["train", "dev"]:
-#     asvspoof2021Raw_LA_aug = dataset.ASVspoof2019LARaw_withTransmission(part=part_)
-#     target_dir = os.path.join("/dataNVME/neil/ASVspoof2019LA_augFeatures", part_, "Raw")
-#     for idx in tqdm(range(444200, len(asvspoof2021Raw_LA_aug))):
-#         # try:
-#         waveform, filename, tag, label, channel = asvspoof2021Raw_LA_aug[idx]
-#         torch.save(waveform, os.path.join(target_dir, "%06d_%s_%s_%s_%s.pt" % (idx, filename, tag, label, channel)))
-#         # except:
-#         #     print(idx)
-#     print("Done!")
+for part_ in ["train", "dev"]:
+    asvspoof2021Raw_LA_aug = dataset.ASVspoof2019LARaw_withTransmission(part=part_)
+    target_dir = os.path.join("/dataNVME/neil/ASVspoof2019LA_augFeatures", part_, "Melspec")
+    mel = Melspec()
+    if not os.path.exists(target_dir):
+        os.makedirs(target_dir)
+    for idx in tqdm(range(len(asvspoof2021Raw_LA_aug))):
+        # try:
+        waveform, filename, tag, label, channel = asvspoof2021Raw_LA_aug[idx]
+        wav_mel = mel(waveform)
+        torch.save(wav_mel, os.path.join(target_dir, "%06d_%s_%s_%s_%s.pt" % (idx, filename, tag, label, channel)))
+        # except:
+        #     print(idx)
+    print("Done!")
 
 
 # asvspoof2021_raw = dataset.ASVspoof2021evalRaw("/data2/neil/ASVspoof2021/ASVspoof2021_LA_eval/flac")
-# target_dir = os.path.join("/dataNVME/neil/ASVspoof2021LAFeatures", "Raw")
+# target_dir = os.path.join("/dataNVME/neil/ASVspoof2021LAFeatures", "Melspec")
+# mel = Melspec()
+# if not os.path.exists(target_dir):
+#     os.makedirs(target_dir)
 # for idx in tqdm(range(len(asvspoof2021_raw))):
 # # for idx in tqdm(list(range(20503, 20505))+list(range(20500+64202, 20500+64204))+list(range(20500+481274, 20500+481276))):
 #     waveform, filename = asvspoof2021_raw[idx]
-#     torch.save(waveform, os.path.join(target_dir, "%06d_%s.pt" % (idx, filename)))
+#     wav_mel = mel(waveform)
+#     torch.save(wav_mel, os.path.join(target_dir, "%06d_%s.pt" % (idx, filename)))
 # print("Done!")
 
 # for part_ in ["train", "dev", "eval"]:
 #     asvspoof_raw = dataset.ASVspoof2019Raw("LA", "/data/neil/DS_10283_3336/", "/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/", part=part_)
-#     target_dir = os.path.join("/data2/neil/ASVspoof2019LA", part_, "Raw")
+#     target_dir = os.path.join("/data2/neil/ASVspoof2019LA", part_, "Melspec")
+#     mel = Melspec()
 #     if not os.path.exists(target_dir):
 #         os.makedirs(target_dir)
 #     for idx in tqdm(range(len(asvspoof_raw))):
 #         waveform, filename, tag, label = asvspoof_raw[idx]
-#         torch.save(waveform.float(), os.path.join(target_dir, "%05d_%s_%s_%s.pt" % (idx, filename, tag, label)))
+#         # waveform = waveform.to(device)
+#         wav_mel = mel(waveform)
+#         torch.save(wav_mel.float(), os.path.join(target_dir, "%05d_%s_%s_%s.pt" % (idx, filename, tag, label)))
 #     print("Done!")

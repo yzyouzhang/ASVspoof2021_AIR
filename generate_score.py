@@ -6,7 +6,7 @@ import torch
 import os
 from tqdm import tqdm
 
-def test_on_ASVspoof2021(feat_model_path, loss_model_path, part, add_loss):
+def test_on_ASVspoof2021(feat_model_path, loss_model_path, output_score_path, part, add_loss):
     dirname = os.path.dirname
     basename = os.path.splitext(os.path.basename(feat_model_path))[0]
     if "checkpoint" in dirname(feat_model_path):
@@ -26,12 +26,12 @@ def test_on_ASVspoof2021(feat_model_path, loss_model_path, part, add_loss):
     # test_set = ASVspoof2021LAeval(pad_chop=True)
     ### use this line to generate score for DF 2021 Challenge
     test_set = ASVspoof2021DFeval(pad_chop=True)
-    testDataLoader = DataLoader(test_set, batch_size=8, shuffle=False, num_workers=0)
+    testDataLoader = DataLoader(test_set, batch_size=1, shuffle=False, num_workers=0)
     model.eval()
 
-    with open(os.path.join(dir_path, 'score.txt'), 'w') as cm_score_file:
+    with open(os.path.join(output_score_path, 'score.txt'), 'w') as cm_score_file:
         for i, (lfcc, audio_fn) in enumerate(tqdm(testDataLoader)):
-            lfcc = lfcc.transpose(2,3).to(device)
+            lfcc = lfcc.transpose(2,3).squeeze(0).to(device)
             labels = torch.zeros((lfcc.shape[0]))
 
             labels = labels.to(device)
@@ -56,13 +56,18 @@ def test_on_ASVspoof2021(feat_model_path, loss_model_path, part, add_loss):
 
 
 if __name__ == "__main__":
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "3"
     device = torch.device("cuda")
     # model_dir = "/data/neil/antiRes/models1028/ocsoftmax"
     # model_dir = "/data/analyse/channel0321/aug"
     # model_dir = "/data/analyse/channel0321/adv_0.001"
     # model_dir = "/data/neil/asv2021/models0609/LFCC+LCNN+P2SGrad+LAaug"
-    model_dir = "/data/xinhui/models/lfcc_ecapa512ctsf_ocs"
+    model_name = "lfcc_ecapa512ctst_p2s"
+    model_dir = os.path.join("/data/xinhui/models/", model_name)
+    task = "DF"
+    output_score_path = os.path.join("/data/neil/scores", model_name+task)
+    if not os.path.exists(output_score_path):
+        os.makedirs(output_score_path)
     model_path = os.path.join(model_dir, "anti-spoofing_cqcc_model.pt")
     loss_model_path = os.path.join(model_dir, "anti-spoofing_loss_model.pt")
-    test_on_ASVspoof2021(model_path, loss_model_path, "eval", "ocsoftmax")
+    test_on_ASVspoof2021(model_path, loss_model_path, output_score_path, "eval", "p2sgrad")
