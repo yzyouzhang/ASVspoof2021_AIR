@@ -6,7 +6,7 @@ import torch
 import os
 from tqdm import tqdm
 
-def test_on_ASVspoof2021(feat_model_path, loss_model_path, output_score_path, part, add_loss):
+def test_on_ASVspoof2021(task, feat_model_path, loss_model_path, output_score_path, part, add_loss):
     dirname = os.path.dirname
     basename = os.path.splitext(os.path.basename(feat_model_path))[0]
     if "checkpoint" in dirname(feat_model_path):
@@ -18,20 +18,26 @@ def test_on_ASVspoof2021(feat_model_path, loss_model_path, output_score_path, pa
     # model = torch.nn.DataParallel(model, list(range(torch.cuda.device_count())))  # for multiple GPUs
     loss_model = torch.load(loss_model_path) if add_loss is not None else None
 
-    ### use this one to tune the fusion weights on the original dev set
-    # test_set = ASVspoof2019("LA", "/data2/neil/ASVspoof2019LA", 'dev', "LFCC", pad_chop=True)
-    ### use this one to tune the fusion weights on the augmented dev set
-    # test_set = ASVspoof2021LA_aug(part="dev", pad_chop=True)
     ### use this line to generate score for LA 2021 Challenge
-    # test_set = ASVspoof2021LAeval(pad_chop=True)
+    if task == "LA":
+        test_set = ASVspoof2021LAeval(pad_chop=True)
     ### use this line to generate score for DF 2021 Challenge
-    test_set = ASVspoof2021DFeval(pad_chop=True)
+    elif task == "DF":
+        test_set = ASVspoof2021DFeval(pad_chop=True)
+    ### use this one to tune the fusion weights on the original dev set
+    elif task == "19dev":
+        test_set = ASVspoof2019("LA", "/data2/neil/ASVspoof2019LA", 'dev', "LFCC", pad_chop=True)
+    ### use this one to tune the fusion weights on the augmented dev set
+    elif task == "19augdev":
+        test_set = ASVspoof2021LA_aug(part="dev", pad_chop=True)
+    else:
+        print("what task?")
     testDataLoader = DataLoader(test_set, batch_size=1, shuffle=False, num_workers=0)
     model.eval()
 
     with open(os.path.join(output_score_path, 'score.txt'), 'w') as cm_score_file:
         for i, (lfcc, audio_fn) in enumerate(tqdm(testDataLoader)):
-            lfcc = lfcc.transpose(2,3).squeeze(0).to(device)
+            lfcc = lfcc.transpose(2,3).to(device)
             labels = torch.zeros((lfcc.shape[0]))
 
             labels = labels.to(device)
@@ -56,18 +62,22 @@ def test_on_ASVspoof2021(feat_model_path, loss_model_path, output_score_path, pa
 
 
 if __name__ == "__main__":
-    os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "2"
     device = torch.device("cuda")
     # model_dir = "/data/neil/antiRes/models1028/ocsoftmax"
     # model_dir = "/data/analyse/channel0321/aug"
     # model_dir = "/data/analyse/channel0321/adv_0.001"
     # model_dir = "/data/neil/asv2021/models0609/LFCC+LCNN+P2SGrad+LAaug"
-    model_name = "lfcc_ecapa512ctst_p2s"
+
+    ## Things need to change
+    model_name = "lfcc_ecapa1024cfst_p2s"
+    task = "LA"
+    loss_for_eval = "p2sgrad"
+
     model_dir = os.path.join("/data/xinhui/models/", model_name)
-    task = "DF"
     output_score_path = os.path.join("/data/neil/scores", model_name+task)
     if not os.path.exists(output_score_path):
         os.makedirs(output_score_path)
     model_path = os.path.join(model_dir, "anti-spoofing_cqcc_model.pt")
     loss_model_path = os.path.join(model_dir, "anti-spoofing_loss_model.pt")
-    test_on_ASVspoof2021(model_path, loss_model_path, output_score_path, "eval", "p2sgrad")
+    test_on_ASVspoof2021(task, model_path, loss_model_path, output_score_path, "eval", loss_for_eval)
