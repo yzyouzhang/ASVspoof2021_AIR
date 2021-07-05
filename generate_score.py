@@ -37,7 +37,7 @@ def test_on_ASVspoof2021(task, feat_model_path, loss_model_path, output_score_pa
 
     with open(os.path.join(output_score_path, 'score.txt'), 'w') as cm_score_file:
         for i, (lfcc, audio_fn) in enumerate(tqdm(testDataLoader)):
-            lfcc = lfcc.transpose(2,3).to(device)
+            lfcc = lfcc.transpose(2,3).squeeze(0).to(device)
             labels = torch.zeros((lfcc.shape[0]))
 
             labels = labels.to(device)
@@ -62,7 +62,7 @@ def test_on_ASVspoof2021(task, feat_model_path, loss_model_path, output_score_pa
 
 
 if __name__ == "__main__":
-    os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "3"
     device = torch.device("cuda")
     # model_dir = "/data/neil/antiRes/models1028/ocsoftmax"
     # model_dir = "/data/analyse/channel0321/aug"
@@ -70,10 +70,11 @@ if __name__ == "__main__":
     # model_dir = "/data/neil/asv2021/models0609/LFCC+LCNN+P2SGrad+LAaug"
 
     ## Things need to change
-    model_name = "lfcc_ecapa1024cfst_p2s"
+    model_name = "lfcc_ecapa1024ctst_p2s"
     task = "LA"
     loss_for_eval = "p2sgrad"
 
+    ## Things do not need to change
     model_dir = os.path.join("/data/xinhui/models/", model_name)
     output_score_path = os.path.join("/data/neil/scores", model_name+task)
     if not os.path.exists(output_score_path):

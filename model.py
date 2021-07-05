@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init as init
+from torch.autograd import Function
 import os
 import random
 import numpy as np
@@ -969,6 +970,54 @@ class RawNet(nn.Module):
 # class RawNet2(nn.Module):
 #     def __init__(self):
 
+class GradientReversalFunction(Function):
+    """
+    Gradient Reversal Layer from:
+    Unsupervised Domain Adaptation by Backpropagation (Ganin & Lempitsky, 2015)
+    Forward pass is the identity function. In the backward pass,
+    the upstream gradients are multiplied by -lambda (i.e. gradient is reversed)
+    """
+
+    @staticmethod
+    def forward(ctx, x, lambda_):
+        ctx.lambda_ = lambda_
+        return x.clone()
+
+    @staticmethod
+    def backward(ctx, grads):
+        lambda_ = ctx.lambda_
+        lambda_ = grads.new_tensor(lambda_)
+        dx = -lambda_ * grads
+        return dx, None
+
+
+class GradientReversal(nn.Module):
+    def __init__(self, lambda_=1):
+        super(GradientReversal, self).__init__()
+        self.lambda_ = lambda_
+
+    def forward(self, x):
+        return GradientReversalFunction.apply(x, self.lambda_)
+
+
+class ChannelClassifier(nn.Module):
+    def __init__(self, enc_dim, nclasses, lambda_):
+        super(ChannelClassifier, self).__init__()
+        self.grl = GradientReversal(lambda_)
+        self.classifier = nn.Sequential(nn.Linear(enc_dim, enc_dim // 2),
+                                        nn.Dropout(0.3),
+                                        nn.ReLU(),
+                                        nn.Linear(enc_dim // 2, nclasses),
+                                        nn.ReLU())
+
+    def initialize_params(self):
+        for layer in self.modules():
+            if isinstance(layer, torch.nn.Linear):
+                init.kaiming_uniform_(layer.weight)
+
+    def forward(self, x):
+        x = self.grl(x)
+        return self.classifier(x)
 
 if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"] = "1"
