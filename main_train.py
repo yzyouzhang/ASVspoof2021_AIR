@@ -34,7 +34,7 @@ def initParams():
     parser.add_argument("-o", "--out_fold", type=str, help="output folder", required=True, default='./models/try/')
 
 
-    parser.add_argument("--ratio", type=float, default=0.5,
+    parser.add_argument("--ratio", type=float, default=0.4,
                         help="ASVspoof ratio in a training batch, the other should be augmented")
 
     # Dataset prepare
