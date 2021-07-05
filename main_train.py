@@ -338,7 +338,7 @@ def train(args):
                     # feats = grl(feats)
                     classifier_out = classifier(feats)
                     _, predicted = torch.max(classifier_out.data, 1)
-                    total_m += channel.size(0)
+                    total_m += channels.size(0)
                     correct_m += (predicted == channels).sum().item()
                     device_loss = criterion(classifier_out, channels)
                     # print(cqcc_loss.item())
