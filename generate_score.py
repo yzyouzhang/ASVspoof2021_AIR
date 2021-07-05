@@ -1,12 +1,11 @@
 from dataset import *
 from model import *
-from ecapa_tdnn import *
 from torch.utils.data import DataLoader
 import torch
 import os
 from tqdm import tqdm
 
-def test_on_ASVspoof2021(task, feat_model_path, loss_model_path, output_score_path, part, add_loss):
+def test_on_ASVspoof2021(task, feat_model_path, loss_model_path, output_score_path, add_loss):
     dirname = os.path.dirname
     basename = os.path.splitext(os.path.basename(feat_model_path))[0]
     if "checkpoint" in dirname(feat_model_path):
@@ -30,14 +29,23 @@ def test_on_ASVspoof2021(task, feat_model_path, loss_model_path, output_score_pa
     ### use this one to tune the fusion weights on the augmented dev set
     elif task == "19augdev":
         test_set = ASVspoof2021LA_aug(part="dev", pad_chop=True)
+    ### use this one to tune the fusion weights on the augmented dev set
+    elif task == '19eval':
+        test_set = ASVspoof2019("LA", "/data2/neil/ASVspoof2019LA", 'eval', "LFCC", pad_chop=True)
     else:
         print("what task?")
     testDataLoader = DataLoader(test_set, batch_size=1, shuffle=False, num_workers=0)
     model.eval()
 
-    with open(os.path.join(output_score_path, 'score.txt'), 'w') as cm_score_file:
-        for i, (lfcc, audio_fn) in enumerate(tqdm(testDataLoader)):
-            lfcc = lfcc.transpose(2,3).squeeze(0).to(device)
+    with open(os.path.join(output_score_path, model_dir.split('/')[-1] + '_' + task + '_score.txt'), 'w') as cm_score_file:
+        for i, data_slice in enumerate(tqdm(testDataLoader)):
+            lfcc, audio_fn, labels = data_slice[0], data_slice[1], data_slice[3]
+            
+            if 'ecapa' in model_path:
+                lfcc = lfcc.transpose(2, 3).squeeze(1).to(device)
+            else:
+                lfcc = lfcc.transpose(2, 3).to(device)
+                
             labels = torch.zeros((lfcc.shape[0]))
 
             labels = labels.to(device)
@@ -55,30 +63,20 @@ def test_on_ASVspoof2021(task, feat_model_path, loss_model_path, output_score_pa
                 outputs, score = loss_model(feats, labels)
                 # score = F.softmax(outputs, dim=1)[:, 0]
             else: pass
-
-            for j in range(labels.size(0)):
-                cm_score_file.write(
-                    '%s %s\n' % (audio_fn[j], -score[j].item()))
-
+            
+            if '19' in task:
+                for j in range(labels.size(0)):
+                    cm_score_file.write('%s %s %s\n' % (audio_fn[j], -score[j].item(), "spoof" if labels[j].data.cpu().numpy() else "bonafide"))
+            else:
+                for j in range(labels.size(0)):
+                    cm_score_file.write('%s %s\n' % (audio_fn[j], -score[j].item()))
 
 if __name__ == "__main__":
-    os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     device = torch.device("cuda")
-    # model_dir = "/data/neil/antiRes/models1028/ocsoftmax"
-    # model_dir = "/data/analyse/channel0321/aug"
-    # model_dir = "/data/analyse/channel0321/adv_0.001"
-    # model_dir = "/data/neil/asv2021/models0609/LFCC+LCNN+P2SGrad+LAaug"
 
-    ## Things need to change
-    model_name = "lfcc_ecapa1024ctst_p2s"
-    task = "LA"
-    loss_for_eval = "p2sgrad"
-
-    ## Things do not need to change
-    model_dir = os.path.join("/data/xinhui/models/", model_name)
-    output_score_path = os.path.join("/data/neil/scores", model_name+task)
-    if not os.path.exists(output_score_path):
-        os.makedirs(output_score_path)
+    task = "19eval"
+    model_dir = "/data/xinhui/models/lfcc_ecapa512ctst_ocs"
     model_path = os.path.join(model_dir, "anti-spoofing_cqcc_model.pt")
     loss_model_path = os.path.join(model_dir, "anti-spoofing_loss_model.pt")
-    test_on_ASVspoof2021(task, model_path, loss_model_path, output_score_path, "eval", loss_for_eval)
+    test_on_ASVspoof2021(task, model_path, loss_model_path, "./scores", 'ocsoftmax')
