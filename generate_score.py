@@ -4,6 +4,38 @@ from torch.utils.data import DataLoader
 import torch
 import os
 from tqdm import tqdm
+import zipfile
+
+
+def init():
+    parser = argparse.ArgumentParser("load model scores")
+    parser.add_argument('--model_folder', type=str, help="directory for pretrained model",
+                        default='/data/xinhui/models/')
+    parser.add_argument('-n', '--model_name', type=str, help="the name of the model",
+                        required=True, default='lfcc_ecapa512ctst_ocs')
+    parser.add_argument('-s', '--score_dir', type=str, help="folder path for writing score",
+                        default='/data/neil/scores')
+    parser.add_argument("-t", "--task", type=str, help="which dataset you would liek to score on",
+                        default='LA', choices=["LA", "DF", "19dev", "19augdev", "19eval"])
+    parser.add_argument('-l', '--loss', help='loss for scoring', default='ocsoftmax',
+                        choices=[None, "ocsoftmax", "amsoftmax", "p2sgrad"])
+    parser.add_argument("--gpu", type=str, help="GPU index", default="0")
+    args = parser.parse_args()
+
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
+    args.cuda = torch.cuda.is_available()
+    args.device = torch.device("cuda" if args.cuda else "cpu")
+
+    if '19' in task:
+        args.out_score_dir = "./scores"
+    else:
+        args.out_score_dir = args.score_dir
+
+    return args
+
+def zip_txt_file(txt_file, zip_name):
+    pass
+
 
 def test_on_ASVspoof2021(task, feat_model_path, loss_model_path, output_score_path, add_loss):
     dirname = os.path.dirname
@@ -37,7 +69,9 @@ def test_on_ASVspoof2021(task, feat_model_path, loss_model_path, output_score_pa
     testDataLoader = DataLoader(test_set, batch_size=1, shuffle=False, num_workers=0)
     model.eval()
 
-    with open(os.path.join(output_score_path, model_dir.split('/')[-1] + '_' + task + '_score.txt'), 'w') as cm_score_file:
+    txt_file_name = os.path.join(output_score_path, model_dir.split('/')[-1] + '_' + task + '_score.txt')
+
+    with open(txt_file_name, 'w') as cm_score_file:
         for i, data_slice in enumerate(tqdm(testDataLoader)):
             lfcc, audio_fn, labels = data_slice[0], data_slice[1], data_slice[3]
             
@@ -72,11 +106,19 @@ def test_on_ASVspoof2021(task, feat_model_path, loss_model_path, output_score_pa
                     cm_score_file.write('%s %s\n' % (audio_fn[j], -score[j].item()))
 
 if __name__ == "__main__":
+    args = init()
+
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     device = torch.device("cuda")
 
     task = "19eval"
+    model_folder = "/data/xinhui/models"
+    model_name = "lfcc_ecapa512ctst_ocs"
+
     model_dir = "/data/xinhui/models/lfcc_ecapa512ctst_ocs"
+    loss_for_eval = "ocsoftmax"
+    score_path = "./scores"
+
     model_path = os.path.join(model_dir, "anti-spoofing_cqcc_model.pt")
     loss_model_path = os.path.join(model_dir, "anti-spoofing_loss_model.pt")
-    test_on_ASVspoof2021(task, model_path, loss_model_path, "./scores", 'ocsoftmax')
+    test_on_ASVspoof2021(task, model_path, loss_model_path, "./scores", loss_for_eval)
