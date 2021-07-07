@@ -31,5 +31,5 @@ def convert2txt(txt_file):
 
 if __name__ == "__main__":
     
-    file = './lfcc_ecapa512cfst_ocs_19dev_score.txt'
+    file = './demos/lfcc_ecapa512cfst_ocs_19eval_score.txt'
     convert2txt(file)
