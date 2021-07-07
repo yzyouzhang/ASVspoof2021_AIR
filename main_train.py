@@ -79,6 +79,8 @@ def initParams():
                         help="whether to use adversarial augmentation in training")
     parser.add_argument('--LA_aug', type=str2bool, nargs='?', const=True, default=False,
                         help="whether to use LA_augmentation in training")
+    parser.add_argument('--DF_aug', type=str2bool, nargs='?', const=True, default=False,
+                        help="whether to use DF_augmentation in training")
     parser.add_argument('--lambda_', type=float, default=0.05, help="lambda for gradient reversal layer")
     parser.add_argument('--lr_d', type=float, default=0.0001, help="learning rate")
 
@@ -183,8 +185,16 @@ def train(args):
         validation_set = ASVspoof2021LA_aug(part="dev",
                                         feature=args.feat, feat_len=args.feat_len,
                                         pad_chop=args.pad_chop, padding=args.padding)
+    if args.DF_aug:
+        training_set = ASVspoof2021DF_aug(part="train",
+                                          feature=args.feat, feat_len=args.feat_len,
+                                          pad_chop=args.pad_chop, padding=args.padding)
+        validation_set = ASVspoof2021DF_aug(part="dev",
+                                            feature=args.feat, feat_len=args.feat_len,
+                                            pad_chop=args.pad_chop, padding=args.padding)
+
     if args.ADV_AUG:
-        assert args.LA_aug == True
+        assert (args.LA_aug or args.DF_aug)
         classifier = ChannelClassifier(args.enc_dim, len(training_set.channel), args.lambda_).to(args.device)
         classifier_optimizer = torch.optim.Adam(classifier.parameters(), lr=args.lr_d,
                                                 betas=(args.beta_1, args.beta_2), eps=args.eps, weight_decay=0.0005)
