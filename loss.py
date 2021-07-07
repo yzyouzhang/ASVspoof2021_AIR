@@ -432,7 +432,7 @@ class P2SGradLoss(nn.Module):
         # MSE between \cos\theta and one-hot vectors
         loss = self.m_loss(cos_theta, index)
         # print(cos_theta[:, 0].shape)
-        return loss, cos_theta[:, 0]
+        return loss, -cos_theta[:, 0]
 
 
 # PyTorch implementation of Focal Loss

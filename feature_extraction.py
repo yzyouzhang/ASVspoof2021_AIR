@@ -168,25 +168,28 @@ class STFT(torch_nn.Module):
 class Melspec(torch_nn.Module):
     """ Mel-spectrogram
     """
-    def __init__(self, ):
+    def __init__(self):
         super(Melspec, self).__init__()
 
-
     def forward(self, x):
-
-        return None
-
+        melspec = librosa.feature.melspectrogram(y=x[0].numpy(), sr=16000, n_fft=512, hop_length=128)
+        return torch.from_numpy(melspec)
 
 if __name__ == "__main__":
-    lfcc = LFCC(320, 160, 512, 16000, 20, with_energy=False)
     wav, sr = librosa.load("/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_train/flac/LA_T_3727749.flac", sr=16000)
     # wav = torch.randn(1, 32456)
     wav = torch.Tensor(np.expand_dims(wav, axis=0))
-    wav_lfcc = lfcc(wav)
-    with open('/dataNVME/neil/ASVspoof2019LAFeatures/train' + '/' + "LA_T_3727749" + "LFCC" + '.pkl', 'rb') as feature_handle:
-        ref_lfcc = pickle.load(feature_handle)
-    print(ref_lfcc.shape)
-    print(ref_lfcc[0:3,0:3])
-    print(wav_lfcc.shape)
-    print(wav_lfcc[0,0:3,0:3])
+
+    # lfcc = LFCC(320, 160, 512, 16000, 20, with_energy=False)
+    # wav_lfcc = lfcc(wav)
+    # with open('/dataNVME/neil/ASVspoof2019LAFeatures/train' + '/' + "LA_T_3727749" + "LFCC" + '.pkl', 'rb') as feature_handle:
+    #     ref_lfcc = pickle.load(feature_handle)
+    # print(ref_lfcc.shape)
+    # print(ref_lfcc[0:3,0:3])
+    # print(wav_lfcc.shape)
+    # print(wav_lfcc[0,0:3,0:3])
+
+    mel = Melspec()
+    wav_mel = mel(wav)
+    print(wav_mel.shape)
 

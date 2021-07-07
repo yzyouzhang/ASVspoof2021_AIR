@@ -130,7 +130,7 @@ class ASVspoof2021LA_aug(Dataset):
                         'silk[br=20k,loss=10]', 'silkwb[br=30k]', 'amr[br=5k15]',
                         'silkwb[br=20k,loss=5]', 'amrwb[br=23k05,nodtx]', 'amrwb[br=12k65,nodtx]',
                         'silkwb[br=20k,loss=10]', 'amr[br=6k7]', 'silkwb[br=10k]', 'silk[br=10k,loss=5]']
-
+        self.channel_dict = dict(zip(iter(self.channel), range(len(self.channel))))
     def __len__(self):
         return len(self.ori_files) + len(self.all_files)
 
@@ -167,7 +167,7 @@ class ASVspoof2021LA_aug(Dataset):
         filename =  "_".join(all_info[1:4])
         tag = self.tag[all_info[4]]
         label = self.label[all_info[5]]
-        return featureTensor, filename, tag, label, channel
+        return featureTensor, filename, tag, label, self.channel_dict[channel]
 
     def collate_fn(self, samples):
         if self.pad_chop:
