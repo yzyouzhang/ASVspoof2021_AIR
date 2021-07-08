@@ -50,10 +50,10 @@ def initParams():
                         choices=['cnn', 'resnet', 'lcnn', 'tdnn', 'lstm', 'rnn', 'cnn_lstm', 'res2net', 'ecapa'])
 
     # Training hyperparameters
-    parser.add_argument('--num_epochs', type=int, default=300, help="Number of epochs for training")
+    parser.add_argument('--num_epochs', type=int, default=200, help="Number of epochs for training")
     parser.add_argument('--batch_size', type=int, default=64, help="Mini batch size for training")
-    parser.add_argument('--lr', type=float, default=0.001, help="learning rate")
-    parser.add_argument('--lr_decay', type=float, default=0.7, help="decay learning rate")
+    parser.add_argument('--lr', type=float, default=0.0003, help="learning rate")
+    parser.add_argument('--lr_decay', type=float, default=0.5, help="decay learning rate")
     parser.add_argument('--interval', type=int, default=30, help="interval to decay lr")
 
     parser.add_argument('--beta_1', type=float, default=0.9, help="bata_1 for Adam")
@@ -164,7 +164,8 @@ def train(args):
     elif args.model == 'lcnn':
         cqcc_model = LCNN(60, args.enc_dim, nclasses=2).to(args.device)
     elif args.model == 'ecapa':
-        cqcc_model = Res2Net2(Bottle2neck, C=1024, model_scale=8, nOut=2, n_mels=60).to(args.device)
+        node_dict = {"LFCC": 60, "Melspec": 128}
+        cqcc_model = Res2Net2(Bottle2neck, C=512, model_scale=8, nOut=2, n_mels=node_dict[args.feat]).to(args.device)
     elif args.model == 'res2net':
         cqcc_model = Res2Net(SEBottle2neck, [3, 4, 6, 3], baseWidth=26, scale=4, pretrained=False, num_classes=2).to(args.device)
 
@@ -514,25 +515,25 @@ def train(args):
                 #     desc_str += key + ':%.5f' % (np.nanmean(devlossDict[key])) + ', '
                 # # v.set_description(desc_str)
                 # print(desc_str)
-            scores = torch.cat(score_loader, 0).data.cpu().numpy()
-            labels = torch.cat(idx_loader, 0).data.cpu().numpy()
-            eer = em.compute_eer(scores[labels == 0], scores[labels == 1])[0]
-            other_eer = em.compute_eer(-scores[labels == 0], -scores[labels == 1])[0]
-            eer = min(eer, other_eer)
+#             scores = torch.cat(score_loader, 0).data.cpu().numpy()
+#             labels = torch.cat(idx_loader, 0).data.cpu().numpy()
+#             eer = em.compute_eer(scores[labels == 0], scores[labels == 1])[0]
+#             other_eer = em.compute_eer(-scores[labels == 0], -scores[labels == 1])[0]
+#             eer = min(eer, other_eer)
 
-            if epoch_num > 0 and args.ADV_AUG:
-                with open(os.path.join(args.out_fold, "dev_loss.log"), "a") as log:
-                    log.write(str(epoch_num) + "\t"+ "\t" +
-                              str(np.nanmean(devlossDict["adv_loss"])) + "\t" +
-                              str(100 * correct_v / total_v) + "\t" +
-                              str(np.nanmean(devlossDict[monitor_loss])) + "\t" +
-                              str(eer) + "\n")
-            else:
-                with open(os.path.join(args.out_fold, "dev_loss.log"), "a") as log:
-                    log.write(str(epoch_num) + "\t" +
-                              str(np.nanmean(devlossDict[monitor_loss])) + "\t" +
-                              str(eer) +"\n")
-            print("Val EER: {}".format(eer))
+#             if epoch_num > 0 and args.ADV_AUG:
+#                 with open(os.path.join(args.out_fold, "dev_loss.log"), "a") as log:
+#                     log.write(str(epoch_num) + "\t"+ "\t" +
+#                               str(np.nanmean(devlossDict["adv_loss"])) + "\t" +
+#                               str(100 * correct_v / total_v) + "\t" +
+#                               str(np.nanmean(devlossDict[monitor_loss])) + "\t" +
+#                               str(eer) + "\n")
+#             else:
+#                 with open(os.path.join(args.out_fold, "dev_loss.log"), "a") as log:
+#                     log.write(str(epoch_num) + "\t" +
+#                               str(np.nanmean(devlossDict[monitor_loss])) + "\t" +
+#                               str(eer) +"\n")
+#             print("Val EER: {}".format(eer))
 
             if args.visualize and ((epoch_num+1) % 3 == 1):
                 feat = torch.cat(ip1_loader, 0)
