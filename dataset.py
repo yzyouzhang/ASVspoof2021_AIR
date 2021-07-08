@@ -59,6 +59,10 @@ class ASVspoof2019(Dataset):
         all_info = basename.split(".")[0].split("_")
         assert len(all_info) == 6
         featureTensor = torch.load(filepath)
+        if self.feature == "Melspec":
+            featureTensor = torch.unsqueeze(featureTensor, 0)
+            featureTensor = featureTensor.permute(0, 2, 1)
+            featureTensor = featureTensor.float()
         this_feat_len = featureTensor.shape[1]
         if self.pad_chop:
             if this_feat_len > self.feat_len:
@@ -149,11 +153,19 @@ class ASVspoof2021LA_aug(Dataset):
             assert len(all_info) == 7
             channel = all_info[6]
         featureTensor = torch.load(filepath)
+        if self.feature == "Melspec":
+            featureTensor = torch.unsqueeze(featureTensor, 0)
+            featureTensor = featureTensor.permute(0, 2, 1)
+            featureTensor = featureTensor.float()
+        #print(featureTensor.size())
+        
         this_feat_len = featureTensor.shape[1]
+        #print(this_feat_len)
         if self.pad_chop:
             if this_feat_len > self.feat_len:
                 startp = np.random.randint(this_feat_len - self.feat_len)
                 featureTensor = featureTensor[:, startp:startp + self.feat_len, :]
+                
             if this_feat_len < self.feat_len:
                 if self.padding == 'zero':
                     featureTensor = padding_Tensor(featureTensor, self.feat_len)
@@ -274,8 +286,8 @@ class ASVspoof2021DF_aug(Dataset):
         filename =  "_".join(all_info[1:4])
         tag = self.tag[all_info[4]]
         label = self.label[all_info[5]]
-        # return featureTensor, filename, tag, label, self.channel_dict[channel]
-        return featureTensor, filename, tag, label, channel
+        return featureTensor, filename, tag, label, self.channel_dict[channel]
+        #return featureTensor, filename, tag, label, channel
 
     def collate_fn(self, samples):
         if self.pad_chop:
