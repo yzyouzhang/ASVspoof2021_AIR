@@ -215,17 +215,18 @@ device = torch.device("cuda" if cuda else "cpu")
 #     print("Done!")
 
 # for part_ in ["train", "dev"]:
-for part_ in ["dev"]:
-    asvspoof2021Raw_LAPA_aug = dataset.ASVspoof2019LARaw_withTransmissionAndDevice(part=part_)
-    target_dir = os.path.join("/data3/neil/ASVspoof2019LAPA_augFeatures", part_, "LFCC")
-    if not os.path.exists(target_dir):
-        os.makedirs(target_dir)
-    lfcc = LFCC(320, 160, 512, 16000, 20, with_energy=False)
-    lfcc = lfcc.to(device)
-    for idx in tqdm(range(len(asvspoof2021Raw_LAPA_aug))):
-        waveform, filename, tag, label, channel, device_ = asvspoof2021Raw_LAPA_aug[idx]
-        waveform = waveform.to(device)
-        lfccOfWav = lfcc(waveform)
-        torch.save(lfccOfWav, os.path.join(target_dir, "%06d_%s_%s_%s_%s_%s.pt"
-                                           % (idx, filename, tag, label, channel, device_)))
-    print("Done!")
+#     asvspoof2021Raw_LAPA_aug = dataset.ASVspoof2019LARaw_withTransmissionAndDevice(part=part_)
+#     target_dir = os.path.join("/data3/neil/ASVspoof2019LAPA_augFeatures", part_, "LFCC")
+#     if not os.path.exists(target_dir):
+#         os.makedirs(target_dir)
+#     lfcc = LFCC(320, 160, 512, 16000, 20, with_energy=False)
+#     lfcc = lfcc.to(device)
+#     for idx in tqdm(range(len(asvspoof2021Raw_LAPA_aug))):
+#         waveform, filename, tag, label, channel, device_ = asvspoof2021Raw_LAPA_aug[idx]
+#         waveform = waveform.to(device)
+#         lfccOfWav = lfcc(waveform)
+#         torch.save(lfccOfWav, os.path.join(target_dir, "%06d_%s_%s_%s_%s_%s.pt"
+#                                            % (idx, filename, tag, label, channel, device_)))
+#     print("Done!")
+
+

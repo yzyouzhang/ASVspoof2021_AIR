@@ -545,3 +545,9 @@ if __name__ == "__main__":
     print(label)
     print(channel)
     print(device)
+    device_lst = []
+    for i in range(23423, 25599):
+        waveform, filename, tag, label, channel, device = asvspoof2021Raw_LAPA_aug[i]
+        if device not in device_lst:
+            device_lst.append(device)
+    print(device_lst)
