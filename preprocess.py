@@ -229,4 +229,17 @@ device = torch.device("cuda" if cuda else "cpu")
 #                                            % (idx, filename, tag, label, channel, device_)))
 #     print("Done!")
 
-
+for part_ in ["train"]:
+    asvspoof2021Raw_DFPA_aug = dataset.ASVspoof2019DFRaw_withCompressionAndDevice(part=part_)
+    target_dir = os.path.join("/data3/neil/ASVspoof2019DFPA_augFeatures", part_, "LFCC")
+    if not os.path.exists(target_dir):
+        os.makedirs(target_dir)
+    lfcc = LFCC(320, 160, 512, 16000, 20, with_energy=False)
+    lfcc = lfcc.to(device)
+    for idx in tqdm(range(len(asvspoof2021Raw_DFPA_aug))):
+        waveform, filename, tag, label, channel, device_ = asvspoof2021Raw_DFPA_aug[idx]
+        waveform = waveform.to(device)
+        lfccOfWav = lfcc(waveform)
+        torch.save(lfccOfWav, os.path.join(target_dir, "%06d_%s_%s_%s_%s_%s.pt"
+                                           % (idx, filename, tag, label, channel, device_)))
+    print("Done!")

@@ -475,6 +475,45 @@ class ASVspoof2019DFRaw_withCompression(Dataset):
 
         return waveform, filename, tag, label, channel
 
+
+class ASVspoof2019DFRaw_withCompressionAndDevice(Dataset):
+    def __init__(self, path_to_database="/data/shared/DFPA_aug", path_to_protocol="/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/", part='train'):
+        super(ASVspoof2019DFRaw_withCompressionAndDevice, self).__init__()
+        self.ptd = path_to_database
+        self.part = part
+        self.path_to_audio = os.path.join(self.ptd, self.part)
+        self.path_to_protocol = path_to_protocol
+        protocol = os.path.join(self.path_to_protocol,
+                                'ASVspoof2019.' + "LA" + '.cm.' + self.part + '.trl.txt')
+        if self.part == "eval":
+            protocol = os.path.join(self.ptd, "LA", 'ASVspoof2019_' + "LA" +
+                                    '_cm_protocols/ASVspoof2019.' + "LA" + '.cm.' + self.part + '.trl.txt')
+        self.tag = {"-": 0, "A01": 1, "A02": 2, "A03": 3, "A04": 4, "A05": 5, "A06": 6, "A07": 7}
+        self.label = {"spoof": 1, "bonafide": 0}
+        self.all_files = librosa.util.find_files(self.path_to_audio, ext="wav")
+
+        with open(protocol, 'r') as f:
+            audio_info = {}
+            for info in f.readlines():
+                speaker, filename, _, tag, label = info.strip().split()
+                audio_info[filename] = (speaker, tag, label)
+            self.all_info = audio_info
+
+    def __len__(self):
+        return len(self.all_files)
+
+    def __getitem__(self, idx):
+        filepath = self.all_files[idx]
+        waveform, sr = torchaudio_load(filepath)
+        filebasename = os.path.basename(filepath)[:-4]
+        channel = filebasename.split("_")[-2]
+        device = filebasename.split("_")[-1]
+        filename = "_".join(filebasename.split("_")[:-2])
+
+        speaker, tag, label = self.all_info[filename]
+
+        return waveform, filename, tag, label, channel, device
+
 if __name__ == "__main__":
     # vctk = VCTK_092(root="/data/neil/VCTK", download=False)
     # print(len(vctk))
