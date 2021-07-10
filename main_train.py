@@ -52,7 +52,7 @@ def initParams():
     # Training hyperparameters
     parser.add_argument('--num_epochs', type=int, default=200, help="Number of epochs for training")
     parser.add_argument('--batch_size', type=int, default=64, help="Mini batch size for training")
-    parser.add_argument('--lr', type=float, default=0.0003, help="learning rate")
+    parser.add_argument('--lr', type=float, default=0.0005, help="learning rate")
     parser.add_argument('--lr_decay', type=float, default=0.5, help="decay learning rate")
     parser.add_argument('--interval', type=int, default=30, help="interval to decay lr")
 
@@ -81,6 +81,10 @@ def initParams():
                         help="whether to use LA_augmentation in training")
     parser.add_argument('--DF_aug', type=str2bool, nargs='?', const=True, default=False,
                         help="whether to use DF_augmentation in training")
+    parser.add_argument('--LAPA_aug', type=str2bool, nargs='?', const=True, default=False,
+                        help="whether to use LAPA_augmentation in training")
+    parser.add_argument('--DFPA_aug', type=str2bool, nargs='?', const=True, default=False,
+                        help="whether to use DFPA_augmentation in training")
     parser.add_argument('--lambda_', type=float, default=0.05, help="lambda for gradient reversal layer")
     parser.add_argument('--lr_d', type=float, default=0.0001, help="learning rate")
 
@@ -193,12 +197,28 @@ def train(args):
         validation_set = ASVspoof2021DF_aug(part="dev",
                                             feature=args.feat, feat_len=args.feat_len,
                                             pad_chop=args.pad_chop, padding=args.padding)
+    if args.LAPA_aug:
+        training_set = ASVspoof2021LAPA_aug(part="train",
+                                          feature=args.feat, feat_len=args.feat_len,
+                                          pad_chop=args.pad_chop, padding=args.padding)
+        validation_set = ASVspoof2021LAPA_aug(part="dev",
+                                            feature=args.feat, feat_len=args.feat_len,
+                                            pad_chop=args.pad_chop, padding=args.padding)
 
     if args.ADV_AUG:
-        assert (args.LA_aug or args.DF_aug)
-        classifier = ChannelClassifier(args.enc_dim, len(training_set.channel), args.lambda_).to(args.device)
-        classifier_optimizer = torch.optim.Adam(classifier.parameters(), lr=args.lr_d,
-                                                betas=(args.beta_1, args.beta_2), eps=args.eps, weight_decay=0.0005)
+        assert (args.LA_aug or args.DF_aug or args.LAPA_aug or args.DFPA_aug)
+        if args.LA_aug or args.DF_aug:
+            classifier = ChannelClassifier(args.enc_dim, len(training_set.channel), args.lambda_).to(args.device)
+            classifier_optimizer = torch.optim.Adam(classifier.parameters(), lr=args.lr_d,
+                                                    betas=(args.beta_1, args.beta_2), eps=args.eps, weight_decay=0.0005)
+        else:
+            classifier1 = ChannelClassifier(args.enc_dim, len(training_set.channel), args.lambda_).to(args.device)
+            classifier1_optimizer = torch.optim.Adam(classifier1.parameters(), lr=args.lr_d,
+                                                    betas=(args.beta_1, args.beta_2), eps=args.eps, weight_decay=0.0005)
+            classifier2 = ChannelClassifier(args.enc_dim, len(training_set.devices), args.lambda_).to(args.device)
+            classifier2_optimizer = torch.optim.Adam(classifier2.parameters(), lr=args.lr_d,
+                                                     betas=(args.beta_1, args.beta_2), eps=args.eps,
+                                                     weight_decay=0.0005)
 
     trainOriDataLoader = DataLoader(training_set, batch_size=int(args.batch_size * args.ratio),
                                     shuffle=False, num_workers=args.num_workers,
@@ -276,7 +296,11 @@ def train(args):
         if args.add_loss == "p2sgrad":
             adjust_learning_rate(args, args.lr, p2sgrad_optimzer, epoch_num)
         if args.ADV_AUG:
-            adjust_learning_rate(args, args.lr_d, classifier_optimizer, epoch_num)
+            if args.LA_aug or args.DF_aug:
+                adjust_learning_rate(args, args.lr_d, classifier_optimizer, epoch_num)
+            else:
+                adjust_learning_rate(args, args.lr_d, classifier1_optimizer, epoch_num)
+                adjust_learning_rate(args, args.lr_d, classifier2_optimizer, epoch_num)
         print('\nEpoch: %d ' % (epoch_num + 1))
         correct_m, total_m, correct_c, total_c, correct_v, total_v = 0, 0, 0, 0, 0, 0
 
@@ -296,7 +320,10 @@ def train(args):
             cqcc = torch.cat((cqccOri, cqccAug), 0)
             tags = torch.cat((tagsOri, tagsAug), 0)
             labels = torch.cat((labelsOri, labelsAug), 0)
+            # if not args.LAPA_aug:
             channels = torch.cat((channelsOri, channelsAug), 0)
+            # else:
+            #     channels = torch.cat((np.array(channelsOri), np.array(channelsAug)), 0)
 
             # count = 0
             # for channel in list(channels):
@@ -345,17 +372,32 @@ def train(args):
                 ang_isoloss, _ = ang_iso(feats, labels)
                 cqcc_loss = ang_isoloss * args.weight_loss
                 if epoch_num > 0 and args.ADV_AUG:
-                    channels = channels.to(args.device)
-                    # feats = grl(feats)
-                    classifier_out = classifier(feats)
-                    _, predicted = torch.max(classifier_out.data, 1)
-                    total_m += channels.size(0)
-                    correct_m += (predicted == channels).sum().item()
-                    device_loss = criterion(classifier_out, channels)
-                    # print(cqcc_loss.item())
-                    cqcc_loss += device_loss
-                    # print(device_loss.item())
-                    trainlossDict["adv_loss"].append(device_loss.item())
+                    if args.LA_aug or args.DF_aug:
+                        channels = channels.to(args.device)
+                        # feats = grl(feats)
+                        classifier_out = classifier(feats)
+                        _, predicted = torch.max(classifier_out.data, 1)
+                        total_m += channels.size(0)
+                        correct_m += (predicted == channels).sum().item()
+                        device_loss = criterion(classifier_out, channels)
+                        # print(cqcc_loss.item())
+                        cqcc_loss += device_loss
+                        # print(device_loss.item())
+                        trainlossDict["adv_loss"].append(device_loss.item())
+                    else:
+                        channels = channels.to(args.device)
+                        codec = channels[:, 0]
+                        devic = channels[:, 1]
+                        classifier1_out = classifier1(feats)
+                        classifier2_out = classifier2(feats)
+                        _, predicted = torch.max(classifier1_out.data, 1)
+                        total_m += channels.size(0)
+                        correct_m += (predicted == codec).sum().item()
+                        codec_loss = criterion(classifier1_out, codec)
+                        devic_loss = criterion(classifier2_out, devic)
+                        advaug_loss = codec_loss + devic_loss
+                        cqcc_loss += advaug_loss
+                        trainlossDict["adv_loss"].append(advaug_loss.item())
                 cqcc_optimizer.zero_grad()
                 ang_iso_optimzer.zero_grad()
                 trainlossDict[args.add_loss].append(ang_isoloss.item())
@@ -373,18 +415,39 @@ def train(args):
                 p2sgrad_optimzer.step()
 
             if args.ADV_AUG:
-                channels = channels.to(args.device)
-                feats, _ = cqcc_model(cqcc)
-                feats = feats.detach()
-                # feats = grl(feats)
-                classifier_out = classifier(feats)
-                _, predicted = torch.max(classifier_out.data, 1)
-                total_c += channels.size(0)
-                correct_c += (predicted == channels).sum().item()
-                device_loss_c = criterion(classifier_out, channels)
-                classifier_optimizer.zero_grad()
-                device_loss_c.backward()
-                classifier_optimizer.step()
+                if args.LA_aug or args.DF_aug:
+                    channels = channels.to(args.device)
+                    feats, _ = cqcc_model(cqcc)
+                    feats = feats.detach()
+                    # feats = grl(feats)
+                    classifier_out = classifier(feats)
+                    _, predicted = torch.max(classifier_out.data, 1)
+                    total_c += channels.size(0)
+                    correct_c += (predicted == channels).sum().item()
+                    device_loss_c = criterion(classifier_out, channels)
+                    classifier_optimizer.zero_grad()
+                    device_loss_c.backward()
+                    classifier_optimizer.step()
+                else:
+                    channels = channels.to(args.device)
+                    codec = channels[:, 0]
+                    devic = channels[:, 1]
+                    feats, _ = cqcc_model(cqcc)
+                    feats = feats.detach()
+                    # feats = grl(feats)
+                    classifier1_out = classifier1(feats)
+                    classifier2_out = classifier2(feats)
+                    _, predicted = torch.max(classifier1_out.data, 1)
+                    total_c += channels.size(0)
+                    correct_c += (predicted == codec).sum().item()
+                    codec_loss_c = criterion(classifier1_out, codec)
+                    classifier1_optimizer.zero_grad()
+                    codec_loss_c.backward()
+                    classifier1_optimizer.step()
+                    devic_loss_c = criterion(classifier2_out, devic)
+                    classifier2_optimizer.zero_grad()
+                    devic_loss_c.backward()
+                    classifier2_optimizer.step()
 
 
             # genuine_feats.append(feats[labels==0])
@@ -414,18 +477,7 @@ def train(args):
                     log.write(str(epoch_num) + "\t" + str(i) + "\t" +
                               str(trainlossDict[monitor_loss][-1]) + "\n")
 
-        if args.visualize and ((epoch_num+1) % 3 == 1):
-            feat = torch.cat(ip1_loader, 0)
-            labels = torch.cat(idx_loader, 0)
-            tags = torch.cat(tag_loader, 0)
-            if args.add_loss in ["isolate", "iso_sq"]:
-                centers = iso_loss.center
-            elif args.add_loss == "ang_iso":
-                centers = ang_iso.center
-            else:
-                centers = torch.mean(feat[labels == 0], dim=0, keepdim=True)
-            visualize(args, feat.data.cpu().numpy(), tags.data.cpu().numpy(), labels.data.cpu().numpy(), centers.data.cpu().numpy(),
-                      epoch_num + 1, "Train")
+
         # print(len(what))
         # print(len(list(set(what))))
         # assert len(what) == len(list(set(what)))
@@ -496,14 +548,32 @@ def train(args):
                     ang_isoloss, score = ang_iso(feats, labels)
                     devlossDict[args.add_loss].append(ang_isoloss.item())
                     if epoch_num > 0 and args.ADV_AUG:
-                        channels = channels.to(args.device)
-                        # feats = grl(feats)
-                        classifier_out = classifier(feats)
-                        _, predicted = torch.max(classifier_out.data, 1)
-                        total_v += channels.size(0)
-                        correct_v += (predicted == channels).sum().item()
-                        device_loss = criterion(classifier_out, channels)
-                        devlossDict["adv_loss"].append(device_loss.item())
+                        if args.LA_aug or args.DF_aug:
+                            channels = channels.to(args.device)
+                            # feats = grl(feats)
+                            classifier_out = classifier(feats)
+                            _, predicted = torch.max(classifier_out.data, 1)
+                            total_v += channels.size(0)
+                            correct_v += (predicted == channels).sum().item()
+                            device_loss = criterion(classifier_out, channels)
+                            # print(cqcc_loss.item())
+                            cqcc_loss += device_loss
+                            # print(device_loss.item())
+                            trainlossDict["adv_loss"].append(device_loss.item())
+                        else:
+                            channels = channels.to(args.device)
+                            codec = channels[:, 0]
+                            devic = channels[:, 1]
+                            classifier1_out = classifier1(feats)
+                            classifier2_out = classifier2(feats)
+                            _, predicted = torch.max(classifier1_out.data, 1)
+                            total_v += channels.size(0)
+                            correct_v += (predicted == codec).sum().item()
+                            codec_loss = criterion(classifier1_out, codec)
+                            devic_loss = criterion(classifier2_out, devic)
+                            advaug_loss = codec_loss + devic_loss
+                            cqcc_loss += advaug_loss
+                            trainlossDict["adv_loss"].append(advaug_loss.item())
                 elif args.add_loss == 'p2sgrad':
                     cqcc_loss, score = p2sgrad_loss(feats, labels)
                     devlossDict[args.add_loss].append(cqcc_loss.item())
@@ -627,10 +697,6 @@ def train(args):
                 loss_model = ang_iso
                 torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
                                                     'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
-            elif args.add_loss == "lgm":
-                loss_model = lgm_loss
-                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
-                                                    'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
             elif args.add_loss == "lgcl":
                 loss_model = lgcl_loss
                 torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
@@ -650,9 +716,6 @@ def train(args):
                 torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
             elif args.add_loss == "ang_iso":
                 loss_model = ang_iso
-                torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
-            elif args.add_loss == "lgm":
-                loss_model = lgm_loss
                 torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
             elif args.add_loss == "lgcl":
                 loss_model = lgcl_loss

@@ -241,7 +241,7 @@ class ASVspoof2021LAPA_aug(Dataset):
         else:
             filepath = self.all_files[idx - len(self.ori_files)]
             basename = os.path.basename(filepath)
-            all_info = basename.split(".")[0].split("_")
+            all_info = basename[:-3].split("_")
             assert len(all_info) == 8
             channel = all_info[6]
             device = all_info[7]
@@ -273,7 +273,8 @@ class ASVspoof2021LAPA_aug(Dataset):
         filename = "_".join(all_info[1:4])
         tag = self.tag[all_info[4]]
         label = self.label[all_info[5]]
-        return featureTensor, filename, tag, label, (self.channel_dict[channel], self.device_dict[device])
+        return featureTensor, filename, tag, label, \
+               np.array([self.channel_dict[channel], self.device_dict[device]])
 
     def collate_fn(self, samples):
         if self.pad_chop:
