@@ -18,8 +18,8 @@ def init():
                         default='/data/neil/scores')
     parser.add_argument("-t", "--task", type=str, help="which dataset you would liek to score on",
                         required=True, default='LA', choices=["LA", "DF", "19dev", "19augdev", "19eval"])
-    parser.add_argument('-l', '--loss', help='loss for scoring', default='ocsoftmax',
-                        required=True, choices=[None, "ocsoftmax", "amsoftmax", "p2sgrad"])
+    parser.add_argument('-l', '--loss', help='loss for scoring', default=None,
+                        required=False, choices=[None, "ocsoftmax", "amsoftmax", "p2sgrad"])
     parser.add_argument("--gpu", type=str, help="GPU index", default="0")
     args = parser.parse_args()
 

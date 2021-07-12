@@ -4,13 +4,16 @@ import torch.nn.functional as F
 import torch.nn.init as init
 from torch.autograd import Function
 import os
-import random
+from torch import Tensor
 import numpy as np
+from torch.utils import data
+from collections import OrderedDict
+from torch.nn.parameter import Parameter
 from pytorch_model_summary import summary
 
 ## Adapted from https://github.com/joaomonteirof/e2e_antispoofing
 ## https://github.com/nii-yamagishilab/project-NN-Pytorch-scripts/blob/newfunctions/
-
+## https://github.com/asvspoof-challenge/2021/blob/main/LA/Baseline-RawNet2/model.py
 
 class SelfAttention(nn.Module):
     def __init__(self, hidden_size, mean_only=False):
@@ -867,7 +870,7 @@ class RawNet(nn.Module):
         x = self.fc2_gru(x)
         output = self.logsoftmax(x)
 
-        return output
+        return x, output
 
     def _make_attention_fc(self, in_features, l_out_features):
 

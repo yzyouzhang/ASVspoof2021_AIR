@@ -204,6 +204,13 @@ def train(args):
         validation_set = ASVspoof2021LAPA_aug(part="dev",
                                             feature=args.feat, feat_len=args.feat_len,
                                             pad_chop=args.pad_chop, padding=args.padding)
+    if args.DFPA_aug:
+        training_set = ASVspoof2021DFPA_aug(part="train",
+                                          feature=args.feat, feat_len=args.feat_len,
+                                          pad_chop=args.pad_chop, padding=args.padding)
+        validation_set = ASVspoof2021DFPA_aug(part="dev",
+                                            feature=args.feat, feat_len=args.feat_len,
+                                            pad_chop=args.pad_chop, padding=args.padding)
 
     if args.ADV_AUG:
         assert (args.LA_aug or args.DF_aug or args.LAPA_aug or args.DFPA_aug)

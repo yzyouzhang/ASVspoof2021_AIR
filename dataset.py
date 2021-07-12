@@ -388,6 +388,85 @@ class ASVspoof2021DF_aug(Dataset):
             return default_collate(samples)
 
 
+class ASVspoof2021DFPA_aug(Dataset):
+    def __init__(self, path_to_ori="/data2/neil/ASVspoof2019LA/",
+                 path_to_augFeatures="/data3/neil/ASVspoof2019DFPA_augFeatures", part="train", feature='LFCC',
+                 feat_len=750, pad_chop=True, padding='repeat'):
+        super(ASVspoof2021DFPA_aug, self).__init__()
+        self.path_to_features = path_to_augFeatures
+        self.part = part
+        self.ori = os.path.join(path_to_ori, part)
+        self.ptf = os.path.join(path_to_augFeatures, part)
+        self.feat_len = feat_len
+        self.feature = feature
+        self.pad_chop = pad_chop
+        self.padding = padding
+        self.ori_files = librosa.util.find_files(os.path.join(self.ori, self.feature), ext="pt")
+        self.all_files = librosa.util.find_files(os.path.join(self.ptf, self.feature), ext="pt")
+        self.tag = {"-": 0, "A01": 1, "A02": 2, "A03": 3, "A04": 4, "A05": 5, "A06": 6}
+        self.label = {"spoof": 1, "bonafide": 0}
+        self.channel = ['no_channel', 'aac[16k]', 'aac[32k]', 'aac[8k]', 'mp3[16k]', 'mp3[32k]', 'mp3[8k]']
+        self.channel_dict = dict(zip(iter(self.channel), range(len(self.channel))))
+        self.devices = ['OktavaML19-16000.ir', 'iPhoneirRecording-16000.ir', 'iPadirRecording-16000.ir',
+                       'ResloRB250-16000.ir', 'telephonehornT65C-16000.ir', 'ResloSR1-16000.ir', 'RCAPB90-16000.ir',
+                       'ResloRBRedLabel-16000.ir', 'telephone90sC-16000.ir', 'SonyC37Fet-16000.ir', 'Doremi-16000.ir',
+                       'BehritoneirRecording-16000.ir', ""]
+        self.device_dict = dict(zip(iter(self.devices), range(len(self.devices))))
+
+    def __len__(self):
+        return len(self.ori_files) + len(self.all_files)
+
+    def __getitem__(self, idx):
+        if idx < len(self.ori_files):
+            filepath = self.ori_files[idx]
+            basename = os.path.basename(filepath)
+            all_info = basename.split(".")[0].split("_")
+            assert len(all_info) == 6
+            channel = "no_channel"
+            device = ""
+        else:
+            filepath = self.all_files[idx - len(self.ori_files)]
+            basename = os.path.basename(filepath)
+            all_info = basename[:-3].split("_")
+            assert len(all_info) == 8
+            channel = all_info[6]
+            device = all_info[7]
+        featureTensor = torch.load(filepath)
+        if self.feature == "Melspec":
+            featureTensor = torch.unsqueeze(featureTensor, 0)
+            featureTensor = featureTensor.permute(0, 2, 1)
+            featureTensor = featureTensor.float()
+        # print(featureTensor.size())
+
+        this_feat_len = featureTensor.shape[1]
+        # print(this_feat_len)
+        if self.pad_chop:
+            if this_feat_len > self.feat_len:
+                startp = np.random.randint(this_feat_len - self.feat_len)
+                featureTensor = featureTensor[:, startp:startp + self.feat_len, :]
+
+            if this_feat_len < self.feat_len:
+                if self.padding == 'zero':
+                    featureTensor = padding_Tensor(featureTensor, self.feat_len)
+                elif self.padding == 'repeat':
+                    featureTensor = repeat_padding_Tensor(featureTensor, self.feat_len)
+                elif self.padding == 'silence':
+                    featureTensor = silence_padding_Tensor(featureTensor, self.feat_len)
+                else:
+                    raise ValueError('Padding should be zero or repeat!')
+        else:
+            pass
+        filename = "_".join(all_info[1:4])
+        tag = self.tag[all_info[4]]
+        label = self.label[all_info[5]]
+        return featureTensor, filename, tag, label, \
+               np.array([self.channel_dict[channel], self.device_dict[device]])
+
+    def collate_fn(self, samples):
+        if self.pad_chop:
+            return default_collate(samples)
+
+
 class ASVspoof2021DFeval(Dataset):
     def __init__(self, path_to_features="/dataNVME/neil/ASVspoof2021DFFeatures", feature='LFCC', feat_len=750, pad_chop=True, padding='repeat'):
         super(ASVspoof2021DFeval, self).__init__()
