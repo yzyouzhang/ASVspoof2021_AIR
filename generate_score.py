@@ -17,7 +17,9 @@ def init():
     parser.add_argument('-s', '--score_dir', type=str, help="folder path for writing score",
                         default='/data/neil/scores')
     parser.add_argument("-t", "--task", type=str, help="which dataset you would liek to score on",
-                        required=True, default='LA', choices=["LA", "DF", "19dev", "19augdev", "19eval"])
+                        required=True, default='LA', choices=["LA", "DF", "19dev",
+                                                              "19laaugdev", "19lapaaugdev",
+                                                              "19dfaugdev", "19dfpaaugdev", "19eval"])
     parser.add_argument('-l', '--loss', help='loss for scoring', default=None,
                         required=False, choices=[None, "ocsoftmax", "amsoftmax", "p2sgrad"])
     parser.add_argument("--gpu", type=str, help="GPU index", default="0")
@@ -60,8 +62,14 @@ def test_on_ASVspoof2021(task, feat_model_path, loss_model_path, output_score_pa
     elif task == "19dev":
         test_set = ASVspoof2019("LA", "/data2/neil/ASVspoof2019LA", 'dev', "LFCC", pad_chop=True)
     ### use this one to tune the fusion weights on the augmented dev set
-    elif task == "19augdev":
+    elif task == "19laaugdev":
         test_set = ASVspoof2021LA_aug(part="dev", pad_chop=True)
+    elif task == "19lapaaugdev":
+        test_set = ASVspoof2021LAPA_aug(part="dev", pad_chop=True)
+    elif task == "19dfaugdev":
+        test_set = ASVspoof2021DF_aug(part="dev", pad_chop=True)
+    elif task == "19dfpaaugdev":
+        test_set = ASVspoof2021DFPA_aug(part="dev", pad_chop=True)
     ### use this one to tune the fusion weights on the augmented dev set
     elif task == '19eval':
         test_set = ASVspoof2019("LA", "/data2/neil/ASVspoof2019LA", 'eval', "LFCC", pad_chop=True)
