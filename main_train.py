@@ -161,10 +161,8 @@ def train(args):
 
     # initialize model
     if args.model == 'resnet':
-        node_dict = {"feat": 4, "LFCC": 3, "LFBB": 3, "Melspec": 6, "LFB": 6, "CQT": 8, "STFT": 11, "MFCC": 87}
+        node_dict = {"LFCC": 3, "Melspec": 6}
         feat_model = ResNet(node_dict[args.feat], args.enc_dim, resnet_type='18', nclasses=1 if args.base_loss == "bce" else 2).to(args.device)
-    elif args.model == 'cnn':
-        feat_model = ConvNet(num_classes = 2, num_nodes = 47232, enc_dim = 256).to(args.device)
     elif args.model == 'lcnn':
         feat_model = LCNN(60, args.enc_dim, nclasses=2).to(args.device)
     elif args.model == 'ecapa':
