@@ -5,7 +5,6 @@ import torch
 import os
 from tqdm import tqdm
 import argparse
-import zipfile
 
 
 def init():
@@ -35,10 +34,6 @@ def init():
         args.out_score_dir = args.score_dir
 
     return args
-
-def zip_txt_file(txt_file, zip_name):
-    pass
-
 
 def test_on_ASVspoof2021(task, feat_model_path, loss_model_path, output_score_path, model_name, add_loss):
     dirname = os.path.dirname

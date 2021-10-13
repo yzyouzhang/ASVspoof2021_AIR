@@ -381,7 +381,6 @@ class ASVspoof2021DF_aug(Dataset):
         tag = self.tag[all_info[4]]
         label = self.label[all_info[5]]
         return featureTensor, filename, tag, label, self.channel_dict[channel]
-        #return featureTensor, filename, tag, label, channel
 
     def collate_fn(self, samples):
         if self.pad_chop:
