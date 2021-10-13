@@ -39,7 +39,7 @@ def initParams():
 
     # Dataset prepare
     parser.add_argument("--feat", type=str, help="which feature to use", default='LFCC',
-                        choices=["CQCC", "LFCC", "MFCC", "STFT", "Melspec", "CQT", "LFB", "LFBB"])
+                        choices=["feat", "LFCC", "MFCC", "STFT", "Melspec", "CQT", "LFB", "LFBB"])
     parser.add_argument("--feat_len", type=int, help="features length", default=750)
     parser.add_argument('--pad_chop', type=str2bool, nargs='?', const=True, default=True, help="whether pad_chop in the dataset")
     parser.add_argument('--padding', type=str, default='repeat', choices=['zero', 'repeat', 'silence'],
@@ -148,35 +148,35 @@ def adjust_learning_rate(args, lr, optimizer, epoch_num):
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
-def shuffle(cqcc, tags, labels):
+def shuffle(feat, tags, labels):
     shuffle_index = torch.randperm(labels.shape[0])
-    cqcc = cqcc[shuffle_index]
+    feat = feat[shuffle_index]
     tags = tags[shuffle_index]
     labels = labels[shuffle_index]
     # this_len = this_len[shuffle_index]
-    return cqcc, tags, labels
+    return feat, tags, labels
 
 def train(args):
     torch.set_default_tensor_type(torch.FloatTensor)
 
     # initialize model
     if args.model == 'resnet':
-        node_dict = {"CQCC": 4, "LFCC": 3, "LFBB": 3, "Melspec": 6, "LFB": 6, "CQT": 8, "STFT": 11, "MFCC": 87}
-        cqcc_model = ResNet(node_dict[args.feat], args.enc_dim, resnet_type='18', nclasses=1 if args.base_loss == "bce" else 2).to(args.device)
+        node_dict = {"feat": 4, "LFCC": 3, "LFBB": 3, "Melspec": 6, "LFB": 6, "CQT": 8, "STFT": 11, "MFCC": 87}
+        feat_model = ResNet(node_dict[args.feat], args.enc_dim, resnet_type='18', nclasses=1 if args.base_loss == "bce" else 2).to(args.device)
     elif args.model == 'cnn':
-        cqcc_model = ConvNet(num_classes = 2, num_nodes = 47232, enc_dim = 256).to(args.device)
+        feat_model = ConvNet(num_classes = 2, num_nodes = 47232, enc_dim = 256).to(args.device)
     elif args.model == 'lcnn':
-        cqcc_model = LCNN(60, args.enc_dim, nclasses=2).to(args.device)
+        feat_model = LCNN(60, args.enc_dim, nclasses=2).to(args.device)
     elif args.model == 'ecapa':
         node_dict = {"LFCC": 60, "Melspec": 128}
-        cqcc_model = Res2Net2(Bottle2neck, C=512, model_scale=8, nOut=2, n_mels=node_dict[args.feat]).to(args.device)
+        feat_model = Res2Net2(Bottle2neck, C=512, model_scale=8, nOut=2, n_mels=node_dict[args.feat]).to(args.device)
     elif args.model == 'res2net':
-        cqcc_model = Res2Net(SEBottle2neck, [3, 4, 6, 3], baseWidth=26, scale=4, pretrained=False, num_classes=2).to(args.device)
+        feat_model = Res2Net(SEBottle2neck, [3, 4, 6, 3], baseWidth=26, scale=4, pretrained=False, num_classes=2).to(args.device)
 
     if args.continue_training:
-        cqcc_model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt')).to(args.device)
-    # cqcc_model = nn.DataParallel(cqcc_model, list(range(torch.cuda.device_count())))  # for multiple GPUs
-    cqcc_optimizer = torch.optim.Adam(cqcc_model.parameters(), lr=args.lr,
+        feat_model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_feat_model.pt')).to(args.device)
+    # feat_model = nn.DataParallel(feat_model, list(range(torch.cuda.device_count())))  # for multiple GPUs
+    feat_optimizer = torch.optim.Adam(feat_model.parameters(), lr=args.lr,
                                       betas=(args.beta_1, args.beta_2), eps=args.eps, weight_decay=0.0005)
 
     training_set = ASVspoof2019(args.access_type, args.path_to_features, 'train',
@@ -291,11 +291,11 @@ def train(args):
 
     for epoch_num in tqdm(range(args.num_epochs)):
         genuine_feats, ip1_loader, tag_loader, idx_loader = [], [], [], []
-        cqcc_model.train()
+        feat_model.train()
         trainlossDict = defaultdict(list)
         devlossDict = defaultdict(list)
         testlossDict = defaultdict(list)
-        adjust_learning_rate(args, args.lr, cqcc_optimizer, epoch_num)
+        adjust_learning_rate(args, args.lr, feat_optimizer, epoch_num)
         if args.add_loss == "isolate":
             adjust_learning_rate(args, args.lr, iso_optimzer, epoch_num)
         if args.add_loss == "ang_iso":
@@ -313,18 +313,18 @@ def train(args):
 
         for i in trange(0, len(trainOriDataLoader), total=len(trainOriDataLoader), initial=0):
             try:
-                cqccOri, audio_fnOri, tagsOri, labelsOri, channelsOri = next(trainOri_flow)
+                featOri, audio_fnOri, tagsOri, labelsOri, channelsOri = next(trainOri_flow)
             except StopIteration:
                 trainOri_flow = iter(trainOriDataLoader)
-                cqccOri, audio_fnOri, tagsOri, labelsOri, channelsOri = next(trainOri_flow)
+                featOri, audio_fnOri, tagsOri, labelsOri, channelsOri = next(trainOri_flow)
 
             try:
-                cqccAug, audio_fnAug, tagsAug, labelsAug, channelsAug = next(trainAug_flow)
+                featAug, audio_fnAug, tagsAug, labelsAug, channelsAug = next(trainAug_flow)
             except StopIteration:
                 trainAug_flow = iter(trainAugDataLoader)
-                cqccAug, audio_fnAug, tagsAug, labelsAug, channelsAug = next(trainAug_flow)
+                featAug, audio_fnAug, tagsAug, labelsAug, channelsAug = next(trainAug_flow)
 
-            cqcc = torch.cat((cqccOri, cqccAug), 0)
+            feat = torch.cat((featOri, featAug), 0)
             tags = torch.cat((tagsOri, tagsAug), 0)
             labels = torch.cat((labelsOri, labelsAug), 0)
             # if not args.LAPA_aug:
@@ -339,45 +339,45 @@ def train(args):
             # print(count / 64)
 
             # if i > 2: break
-            cqcc = cqcc.transpose(2,3).to(args.device)
+            feat = feat.transpose(2,3).to(args.device)
 
             tags = tags.to(args.device)
             labels = labels.to(args.device)
             # this_len = this_len.to(args.device)
 
             if args.ratio < 1:
-                cqcc, tags, labels = shuffle(cqcc, tags, labels)
+                feat, tags, labels = shuffle(feat, tags, labels)
                 
             if args.model == 'ecapa':
-                cqcc = torch.squeeze(cqcc)
+                feat = torch.squeeze(feat)
 
-            feats, cqcc_outputs = cqcc_model(cqcc)
+            feats, feat_outputs = feat_model(feat)
 
             if args.base_loss == "bce":
-                cqcc_loss = criterion(cqcc_outputs, labels.unsqueeze(1).float())
+                feat_loss = criterion(feat_outputs, labels.unsqueeze(1).float())
             else:
-                cqcc_loss = criterion(cqcc_outputs, labels)
+                feat_loss = criterion(feat_outputs, labels)
 
-            trainlossDict['base_loss'].append(cqcc_loss.item())
+            trainlossDict['base_loss'].append(feat_loss.item())
 
             if args.add_loss == None:
-                cqcc_optimizer.zero_grad()
-                cqcc_loss.backward()
-                cqcc_optimizer.step()
+                feat_optimizer.zero_grad()
+                feat_loss.backward()
+                feat_optimizer.step()
 
             if args.add_loss in ["isolate", "iso_sq"]:
                 isoloss = iso_loss(feats, labels)
-                cqcc_loss = isoloss * args.weight_loss
-                cqcc_optimizer.zero_grad()
+                feat_loss = isoloss * args.weight_loss
+                feat_optimizer.zero_grad()
                 iso_optimzer.zero_grad()
                 trainlossDict[args.add_loss].append(isoloss.item())
-                cqcc_loss.backward()
-                cqcc_optimizer.step()
+                feat_loss.backward()
+                feat_optimizer.step()
                 iso_optimzer.step()
 
             if args.add_loss == "ang_iso":
                 ang_isoloss, _ = ang_iso(feats, labels)
-                cqcc_loss = ang_isoloss * args.weight_loss
+                feat_loss = ang_isoloss * args.weight_loss
                 if epoch_num > 0 and args.ADV_AUG:
                     if args.LA_aug or args.DF_aug:
                         channels = channels.to(args.device)
@@ -387,8 +387,8 @@ def train(args):
                         total_m += channels.size(0)
                         correct_m += (predicted == channels).sum().item()
                         device_loss = criterion(classifier_out, channels)
-                        # print(cqcc_loss.item())
-                        cqcc_loss += device_loss
+                        # print(feat_loss.item())
+                        feat_loss += device_loss
                         # print(device_loss.item())
                         trainlossDict["adv_loss"].append(device_loss.item())
                     else:
@@ -403,28 +403,28 @@ def train(args):
                         codec_loss = criterion(classifier1_out, codec)
                         devic_loss = criterion(classifier2_out, devic)
                         advaug_loss = codec_loss + devic_loss
-                        cqcc_loss += advaug_loss
+                        feat_loss += advaug_loss
                         trainlossDict["adv_loss"].append(advaug_loss.item())
-                cqcc_optimizer.zero_grad()
+                feat_optimizer.zero_grad()
                 ang_iso_optimzer.zero_grad()
                 trainlossDict[args.add_loss].append(ang_isoloss.item())
-                cqcc_loss.backward()
-                cqcc_optimizer.step()
+                feat_loss.backward()
+                feat_optimizer.step()
                 ang_iso_optimzer.step()
 
             if args.add_loss == "p2sgrad":
-                cqcc_loss, _ = p2sgrad_loss(feats, labels)
-                trainlossDict[args.add_loss].append(cqcc_loss.item())
-                cqcc_optimizer.zero_grad()
+                feat_loss, _ = p2sgrad_loss(feats, labels)
+                trainlossDict[args.add_loss].append(feat_loss.item())
+                feat_optimizer.zero_grad()
                 p2sgrad_optimzer.zero_grad()
-                cqcc_loss.backward()
-                cqcc_optimizer.step()
+                feat_loss.backward()
+                feat_optimizer.step()
                 p2sgrad_optimzer.step()
 
             if args.ADV_AUG:
                 if args.LA_aug or args.DF_aug:
                     channels = channels.to(args.device)
-                    feats, _ = cqcc_model(cqcc)
+                    feats, _ = feat_model(feat)
                     feats = feats.detach()
                     # feats = grl(feats)
                     classifier_out = classifier(feats)
@@ -439,7 +439,7 @@ def train(args):
                     channels = channels.to(args.device)
                     codec = channels[:, 0]
                     devic = channels[:, 1]
-                    feats, _ = cqcc_model(cqcc)
+                    feats, _ = feat_model(feat)
                     feats = feats.detach()
                     # feats = grl(feats)
                     classifier1_out = classifier1(feats)
@@ -490,7 +490,7 @@ def train(args):
         # assert len(what) == len(list(set(what)))
         # Val the model
         # eval mode (batchnorm uses moving mean/variance instead of mini-batch mean/variance)
-        cqcc_model.eval()
+        feat_model.eval()
         with torch.no_grad():
             ip1_loader, tag_loader, idx_loader, score_loader = [], [], [], []
             # with trange(2) as v:
@@ -498,55 +498,55 @@ def train(args):
             #     for i in v:
             for i in trange(0, len(valOriDataLoader), total=len(valOriDataLoader), initial=0):
                 try:
-                    cqccOri, audio_fnOri, tagsOri, labelsOri, channelsOri = next(valOri_flow)
+                    featOri, audio_fnOri, tagsOri, labelsOri, channelsOri = next(valOri_flow)
                 except StopIteration:
                     valOri_flow = iter(valOriDataLoader)
-                    cqccOri, audio_fnOri, tagsOri, labelsOri, channelsOri = next(valOri_flow)
+                    featOri, audio_fnOri, tagsOri, labelsOri, channelsOri = next(valOri_flow)
 
                 try:
-                    cqccAug, audio_fnAug, tagsAug, labelsAug, channelsAug = next(valAug_flow)
+                    featAug, audio_fnAug, tagsAug, labelsAug, channelsAug = next(valAug_flow)
                 except StopIteration:
                     valAug_flow = iter(valAugDataLoader)
-                    cqccAug, audio_fnAug, tagsAug, labelsAug, channelsAug = next(valAug_flow)
+                    featAug, audio_fnAug, tagsAug, labelsAug, channelsAug = next(valAug_flow)
 
-                cqcc = torch.cat((cqccOri, cqccAug), 0)
+                feat = torch.cat((featOri, featAug), 0)
                 tags = torch.cat((tagsOri, tagsAug), 0)
                 labels = torch.cat((labelsOri, labelsAug), 0)
                 channels = torch.cat((channelsOri, channelsAug), 0)
 
                 # if i > 2: break
-                cqcc = cqcc.transpose(2,3).to(args.device)
+                feat = feat.transpose(2,3).to(args.device)
 
                 tags = tags.to(args.device)
                 labels = labels.to(args.device)
 
-                cqcc, tags, labels = shuffle(cqcc, tags, labels)
+                feat, tags, labels = shuffle(feat, tags, labels)
                 
                 if args.model == 'ecapa':
-                    cqcc = torch.squeeze(cqcc)
+                    feat = torch.squeeze(feat)
 
-                feats, cqcc_outputs = cqcc_model(cqcc)
+                feats, feat_outputs = feat_model(feat)
 
                 if args.base_loss == "bce":
-                    cqcc_loss = criterion(cqcc_outputs, labels.unsqueeze(1).float())
-                    score = cqcc_outputs[:, 0]
+                    feat_loss = criterion(feat_outputs, labels.unsqueeze(1).float())
+                    score = feat_outputs[:, 0]
                 else:
-                    cqcc_loss = criterion(cqcc_outputs, labels)
-                    score = F.softmax(cqcc_outputs, dim=1)[:, 0]
+                    feat_loss = criterion(feat_outputs, labels)
+                    score = F.softmax(feat_outputs, dim=1)[:, 0]
 
                 ip1_loader.append(feats)
                 idx_loader.append((labels))
                 tag_loader.append((tags))
 
                 if args.add_loss in [None]:
-                    devlossDict["base_loss"].append(cqcc_loss.item())
+                    devlossDict["base_loss"].append(feat_loss.item())
                 elif args.add_loss in ["lgm", "center"]:
-                    devlossDict[args.add_loss].append(cqcc_loss.item())
+                    devlossDict[args.add_loss].append(feat_loss.item())
                 elif args.add_loss == "lgcl":
                     outputs, moutputs = lgcl_loss(feats, labels)
-                    cqcc_loss = criterion(moutputs, labels)
+                    feat_loss = criterion(moutputs, labels)
                     score = F.softmax(outputs, dim=1)[:, 0]
-                    devlossDict[args.add_loss].append(cqcc_loss.item())
+                    devlossDict[args.add_loss].append(feat_loss.item())
                 elif args.add_loss in ["isolate", "iso_sq"]:
                     isoloss = iso_loss(feats, labels)
                     score = torch.norm(feats - iso_loss.center, p=2, dim=1)
@@ -563,8 +563,8 @@ def train(args):
                             total_v += channels.size(0)
                             correct_v += (predicted == channels).sum().item()
                             device_loss = criterion(classifier_out, channels)
-                            # print(cqcc_loss.item())
-                            cqcc_loss += device_loss
+                            # print(feat_loss.item())
+                            feat_loss += device_loss
                             # print(device_loss.item())
                             trainlossDict["adv_loss"].append(device_loss.item())
                         else:
@@ -579,11 +579,11 @@ def train(args):
                             codec_loss = criterion(classifier1_out, codec)
                             devic_loss = criterion(classifier2_out, devic)
                             advaug_loss = codec_loss + devic_loss
-                            cqcc_loss += advaug_loss
+                            feat_loss += advaug_loss
                             trainlossDict["adv_loss"].append(advaug_loss.item())
                 elif args.add_loss == 'p2sgrad':
-                    cqcc_loss, score = p2sgrad_loss(feats, labels)
-                    devlossDict[args.add_loss].append(cqcc_loss.item())
+                    feat_loss, score = p2sgrad_loss(feats, labels)
+                    devlossDict[args.add_loss].append(feat_loss.item())
 
                 score_loader.append(score)
 
@@ -627,36 +627,36 @@ def train(args):
         if args.test_on_eval:
             with torch.no_grad():
                 ip1_loader, tag_loader, idx_loader, score_loader = [], [], [], []
-                for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(testDataLoader)):
+                for i, (feat, audio_fn, tags, labels) in enumerate(tqdm(testDataLoader)):
                     # if i > 2: break
-                    cqcc = cqcc.transpose(2,3).to(args.device)
+                    feat = feat.transpose(2,3).to(args.device)
                     tags = tags.to(args.device)
                     labels = labels.to(args.device)
 
                     if args.model == 'ecapa':
-                        cqcc = torch.squeeze(cqcc)
-                    feats, cqcc_outputs = cqcc_model(cqcc)
+                        feat = torch.squeeze(feat)
+                    feats, feat_outputs = feat_model(feat)
 
                     if args.base_loss == "bce":
-                        cqcc_loss = criterion(cqcc_outputs, labels.unsqueeze(1).float())
-                        score = cqcc_outputs[:, 0]
+                        feat_loss = criterion(feat_outputs, labels.unsqueeze(1).float())
+                        score = feat_outputs[:, 0]
                     else:
-                        cqcc_loss = criterion(cqcc_outputs, labels)
-                        score = F.softmax(cqcc_outputs, dim=1)[:, 0]
+                        feat_loss = criterion(feat_outputs, labels)
+                        score = F.softmax(feat_outputs, dim=1)[:, 0]
 
                     ip1_loader.append(feats)
                     idx_loader.append((labels))
                     tag_loader.append((tags))
 
                     if args.add_loss in [None]:
-                        testlossDict["base_loss"].append(cqcc_loss.item())
+                        testlossDict["base_loss"].append(feat_loss.item())
                     elif args.add_loss in ["lgm", "center"]:
-                        testlossDict[args.add_loss].append(cqcc_loss.item())
+                        testlossDict[args.add_loss].append(feat_loss.item())
                     elif args.add_loss == "lgcl":
                         outputs, moutputs = lgcl_loss(feats, labels)
-                        cqcc_loss = criterion(moutputs, labels)
+                        feat_loss = criterion(moutputs, labels)
                         score = F.softmax(outputs, dim=1)[:, 0]
-                        testlossDict[args.add_loss].append(cqcc_loss.item())
+                        testlossDict[args.add_loss].append(feat_loss.item())
                     elif args.add_loss in ["isolate", "iso_sq"]:
                         isoloss = iso_loss(feats, labels)
                         score = torch.norm(feats - iso_loss.center, p=2, dim=1)
@@ -690,8 +690,8 @@ def train(args):
         # if args.add_loss == "isolate":
         #     print("isolate center: ", iso_loss.center.data)
         if (epoch_num + 1) % 1 == 0:
-            torch.save(cqcc_model, os.path.join(args.out_fold, 'checkpoint',
-                                                'anti-spoofing_cqcc_model_%d.pt' % (epoch_num + 1)))
+            torch.save(feat_model, os.path.join(args.out_fold, 'checkpoint',
+                                                'anti-spoofing_feat_model_%d.pt' % (epoch_num + 1)))
             if args.add_loss == "center":
                 loss_model = centerLoss
                 torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
@@ -717,7 +717,7 @@ def train(args):
 
         if valLoss < prev_loss:
             # Save the model checkpoint
-            torch.save(cqcc_model, os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt'))
+            torch.save(feat_model, os.path.join(args.out_fold, 'anti-spoofing_feat_model.pt'))
             if args.add_loss in ["isolate", "iso_sq"]:
                 loss_model = iso_loss
                 torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
@@ -742,11 +742,11 @@ def train(args):
                 res_file.write('\nTrained Epochs: %d\n' % (epoch_num - 499))
             break
         # if early_stop_cnt == 1:
-        #     torch.save(cqcc_model, os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt')
+        #     torch.save(feat_model, os.path.join(args.out_fold, 'anti-spoofing_feat_model.pt')
 
-            # print('Dev Accuracy of the model on the val features: {} % '.format(100 * cqcc_correct / total))
+            # print('Dev Accuracy of the model on the val features: {} % '.format(100 * feat_correct / total))
 
-    return cqcc_model, loss_model
+    return feat_model, loss_model
 
 
 
@@ -754,7 +754,7 @@ if __name__ == "__main__":
     args = initParams()
     if not args.test_only:
         _, _ = train(args)
-    # model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt'))
+    # model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_feat_model.pt'))
     # if args.add_loss is None:
     #     loss_model = None
     # else:
@@ -770,6 +770,6 @@ if __name__ == "__main__":
 
     # # Test a checkpoint model
     # args = initParams()
-    # model = torch.load(os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_cqcc_model_19.pt'))
+    # model = torch.load(os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_feat_model_19.pt'))
     # loss_model = torch.load(os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_19.pt'))
     # VAeer_cm, VAmin_tDCF = test(args, model, loss_model, "dev")
