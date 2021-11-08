@@ -562,7 +562,7 @@ def train(args):
                             # print(feat_loss.item())
                             feat_loss += device_loss
                             # print(device_loss.item())
-                            trainlossDict["adv_loss"].append(device_loss.item())
+                            devlossDict["adv_loss"].append(device_loss.item())
                         else:
                             channels = channels.to(args.device)
                             codec = channels[:, 0]
@@ -576,7 +576,7 @@ def train(args):
                             devic_loss = criterion(classifier2_out, devic)
                             advaug_loss = codec_loss + devic_loss
                             feat_loss += advaug_loss
-                            trainlossDict["adv_loss"].append(advaug_loss.item())
+                            devlossDict["adv_loss"].append(advaug_loss.item())
                 elif args.add_loss == 'p2sgrad':
                     feat_loss, score = p2sgrad_loss(feats, labels)
                     devlossDict[args.add_loss].append(feat_loss.item())
