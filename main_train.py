@@ -16,7 +16,7 @@ from tqdm import tqdm, trange
 import random
 from utils import *
 import eval_metrics as em
-from ecapa_tdnn import *
+from ECAPA_TDNN import *
 
 torch.set_default_tensor_type(torch.FloatTensor)
 
@@ -39,7 +39,7 @@ def initParams():
 
     # Dataset prepare
     parser.add_argument("--feat", type=str, help="which feature to use", default='LFCC',
-                        choices=["feat", "LFCC", "MFCC", "STFT", "Melspec", "CQT", "LFB", "LFBB"])
+                        choices=["CQCC", "LFCC"])
     parser.add_argument("--feat_len", type=int, help="features length", default=750)
     parser.add_argument('--pad_chop', type=str2bool, nargs='?', const=True, default=True, help="whether pad_chop in the dataset")
     parser.add_argument('--padding', type=str, default='repeat', choices=['zero', 'repeat', 'silence'],
@@ -47,7 +47,7 @@ def initParams():
     parser.add_argument("--enc_dim", type=int, help="encoding dimension", default=256)
 
     parser.add_argument('-m', '--model', help='Model arch', default='lcnn',
-                        choices=['cnn', 'resnet', 'lcnn', 'tdnn', 'lstm', 'rnn', 'cnn_lstm', 'res2net', 'ecapa'])
+                        choices=['cnn', 'resnet', 'lcnn', 'res2net', 'ecapa'])
 
     # Training hyperparameters
     parser.add_argument('--num_epochs', type=int, default=200, help="Number of epochs for training")
@@ -64,7 +64,7 @@ def initParams():
 
     parser.add_argument('--base_loss', type=str, default="ce", choices=["ce", "bce"], help="use which loss for basic training")
     parser.add_argument('--add_loss', type=str, default=None,
-                        choices=[None, 'center', 'lgm', 'lgcl', 'isolate', 'iso_sq', 'ang_iso', 'multi_isolate', 'multicenter_isolate', 'p2sgrad'], help="add other loss for one-class training")
+                        choices=[None, 'lgcl', 'isolate', 'ang_iso', 'p2sgrad'], help="add other loss for one-class training")
     parser.add_argument('--weight_loss', type=float, default=1, help="weight for other loss")
     parser.add_argument('--r_real', type=float, default=0.9, help="r_real for isolate loss")
     parser.add_argument('--r_fake', type=float, default=0.2, help="r_fake for isolate loss")
@@ -139,8 +139,6 @@ def initParams():
     print('Cuda device available: ', args.cuda)
     args.device = torch.device("cuda" if args.cuda else "cpu")
 
-    print(args.pad_chop)
-
     return args
 
 def adjust_learning_rate(args, lr, optimizer, epoch_num):
@@ -161,12 +159,12 @@ def train(args):
 
     # initialize model
     if args.model == 'resnet':
-        node_dict = {"LFCC": 3, "Melspec": 6}
+        node_dict = {"LFCC": 3}
         feat_model = ResNet(node_dict[args.feat], args.enc_dim, resnet_type='18', nclasses=1 if args.base_loss == "bce" else 2).to(args.device)
     elif args.model == 'lcnn':
         feat_model = LCNN(60, args.enc_dim, nclasses=2).to(args.device)
     elif args.model == 'ecapa':
-        node_dict = {"LFCC": 60, "Melspec": 128}
+        node_dict = {"LFCC": 60}
         feat_model = Res2Net2(Bottle2neck, C=512, model_scale=8, nOut=2, n_mels=node_dict[args.feat]).to(args.device)
     elif args.model == 'res2net':
         feat_model = Res2Net(SEBottle2neck, [3, 4, 6, 3], baseWidth=26, scale=4, pretrained=False, num_classes=2).to(args.device)
