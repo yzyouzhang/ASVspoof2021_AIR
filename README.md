@@ -4,10 +4,23 @@
 
 This repository contains our implementation of the paper, "UR Channel-Robust Synthetic Speech Detection System for ASVspoof 2021".
 [Paper link here](https://www.isca-speech.org/archive/asvspoof_2021/chen21_asvspoof.html)
+
+The code here is a little bit unorganized, please feel free to open any issues. The contribution from this work mainly derives from our previous research works. Please feel free to check out the paper and code there.
+
+## Reference to our prior research works
+[1] Y. Zhang, F. Jiang and Z. Duan, "One-Class Learning Towards Synthetic Voice Spoofing Detection," in IEEE Signal Processing Letters, vol. 28, pp. 937-941, 2021, doi: 10.1109/LSP.2021.3076358. [[link](https://ieeexplore.ieee.org/document/9417604)] [[arXiv](https://arxiv.org/pdf/2010.13995.pdf)] [[code](https://github.com/yzyouzhang/AIR-ASVspoof)]
+
+[2] Y. Zhang, G. Zhu, F. Jiang, Z. Duan, "An Empirical Study on Channel Effects for Synthetic Voice Spoofing Countermeasure Systems," Proc. Interspeech 2021, pp. 4309-4313, 2021, doi: 10.21437/Interspeech.2021-1820. [[link](https://www.isca-speech.org/archive/interspeech_2021/zhang21ea_interspeech.html)] [[arXiv](https://arxiv.org/pdf/2104.01320.pdf)] [[code](https://github.com/yzyouzhang/Empirical-Channel-CM)]
+
+
 ### Requirements
 python==3.6
 
 pytorch==1.1.0
+
+### Data Channel Augmentation
+We use impulse responses from [this repo](https://github.com/idiap/acoustic-simulator) and the code we adapted is in the `channel_simulation` folder. Please refer to the paper for the augmentation process.
+
 
 ### Data Preprocess
 The raw wave files of the ASVspoof 2019 dataset is stored in `/data/neil/DS_10283_3336`.
@@ -47,9 +60,4 @@ python3 generate_score.py
   doi={10.21437/ASVSPOOF.2021-12}
 }
 ```
-
-## Reference to our prior works
-[1] Y. Zhang, F. Jiang and Z. Duan, "One-Class Learning Towards Synthetic Voice Spoofing Detection," in IEEE Signal Processing Letters, vol. 28, pp. 937-941, 2021, doi: 10.1109/LSP.2021.3076358. [[link](https://ieeexplore.ieee.org/document/9417604)] [[code](https://github.com/yzyouzhang/AIR-ASVspoof)]
-
-[2] Y. Zhang, G. Zhu, F. Jiang, Z. Duan, An Empirical Study on Channel Effects for Synthetic Voice Spoofing Countermeasure Systems. Proc. Interspeech 2021, pp. 4309-4313, 2021, doi: 10.21437/Interspeech.2021-1820. [[link](https://www.isca-speech.org/archive/interspeech_2021/zhang21ea_interspeech.html)] [[code](https://github.com/yzyouzhang/Empirical-Channel-CM)]
 
