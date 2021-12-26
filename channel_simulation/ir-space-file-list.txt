@@ -1,0 +1,15 @@
+impulse-responses/spaces/small/cksde/smallroom3-16000.ir
+impulse-responses/spaces/small/cksde/smallplace6-16000.ir
+impulse-responses/spaces/small/cksde/clearroom1-16000.ir
+impulse-responses/spaces/small/adventurekid/aksrooms/AKSROOMS001-16000.ir
+impulse-responses/spaces/small/adventurekid/aksrooms/AKSROOMS016-16000.ir
+impulse-responses/spaces/small/adventurekid/aksrooms/AKSROOMS006-16000.ir
+impulse-responses/spaces/small/adventurekid/aksrooms/AKSROOMS007-16000.ir
+impulse-responses/spaces/small/voxengo/SmallDrumRoom-16000.ir
+impulse-responses/spaces/small/voxengo/BottleHall-16000.ir
+impulse-responses/spaces/small/voxengo/CementBlocks2-16000.ir
+impulse-responses/spaces/small/voxengo/CementBlocks1-16000.ir
+impulse-responses/spaces/small/voxengo/TrigRoom-16000.ir
+impulse-responses/spaces/small/voxengo/NiceDrumRoom-16000.ir
+impulse-responses/spaces/small/voxengo/SmallPrehistoricCave-16000.ir
+impulse-responses/spaces/small/voxengo/BlockInside-16000.ir

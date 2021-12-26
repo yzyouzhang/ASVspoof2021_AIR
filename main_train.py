@@ -64,7 +64,7 @@ def initParams():
 
     parser.add_argument('--base_loss', type=str, default="ce", choices=["ce", "bce"], help="use which loss for basic training")
     parser.add_argument('--add_loss', type=str, default=None,
-                        choices=[None, 'lgcl', 'isolate', 'ang_iso', 'p2sgrad'], help="add other loss for one-class training")
+                        choices=[None, 'isolate', 'ang_iso', 'p2sgrad'], help="add other loss for one-class training")
     parser.add_argument('--weight_loss', type=float, default=1, help="weight for other loss")
     parser.add_argument('--r_real', type=float, default=0.9, help="r_real for isolate loss")
     parser.add_argument('--r_fake', type=float, default=0.2, help="r_fake for isolate loss")
@@ -536,13 +536,6 @@ def train(args):
 
                 if args.add_loss in [None]:
                     devlossDict["base_loss"].append(feat_loss.item())
-                elif args.add_loss in ["lgm", "center"]:
-                    devlossDict[args.add_loss].append(feat_loss.item())
-                elif args.add_loss == "lgcl":
-                    outputs, moutputs = lgcl_loss(feats, labels)
-                    feat_loss = criterion(moutputs, labels)
-                    score = F.softmax(outputs, dim=1)[:, 0]
-                    devlossDict[args.add_loss].append(feat_loss.item())
                 elif args.add_loss in ["isolate", "iso_sq"]:
                     isoloss = iso_loss(feats, labels)
                     score = torch.norm(feats - iso_loss.center, p=2, dim=1)
@@ -646,13 +639,6 @@ def train(args):
 
                     if args.add_loss in [None]:
                         testlossDict["base_loss"].append(feat_loss.item())
-                    elif args.add_loss in ["lgm", "center"]:
-                        testlossDict[args.add_loss].append(feat_loss.item())
-                    elif args.add_loss == "lgcl":
-                        outputs, moutputs = lgcl_loss(feats, labels)
-                        feat_loss = criterion(moutputs, labels)
-                        score = F.softmax(outputs, dim=1)[:, 0]
-                        testlossDict[args.add_loss].append(feat_loss.item())
                     elif args.add_loss in ["isolate", "iso_sq"]:
                         isoloss = iso_loss(feats, labels)
                         score = torch.norm(feats - iso_loss.center, p=2, dim=1)
@@ -688,20 +674,12 @@ def train(args):
         if (epoch_num + 1) % 1 == 0:
             torch.save(feat_model, os.path.join(args.out_fold, 'checkpoint',
                                                 'anti-spoofing_feat_model_%d.pt' % (epoch_num + 1)))
-            if args.add_loss == "center":
-                loss_model = centerLoss
-                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
-                                                    'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
-            elif args.add_loss in ["isolate", "iso_sq"]:
+            if args.add_loss in ["isolate", "iso_sq"]:
                 loss_model = iso_loss
                 torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
                                                     'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
             elif args.add_loss == "ang_iso":
                 loss_model = ang_iso
-                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
-                                                    'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
-            elif args.add_loss == "lgcl":
-                loss_model = lgcl_loss
                 torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
                                                     'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
             elif args.add_loss == "p2sgrad":
@@ -719,9 +697,6 @@ def train(args):
                 torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
             elif args.add_loss == "ang_iso":
                 loss_model = ang_iso
-                torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
-            elif args.add_loss == "lgcl":
-                loss_model = lgcl_loss
                 torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
             elif args.add_loss == "p2sgrad":
                 loss_model = p2sgrad_loss

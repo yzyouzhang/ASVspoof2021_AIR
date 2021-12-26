@@ -7,30 +7,6 @@ from torch.autograd import Variable
 import numpy as np
 
 
-class LossForOCAnti(nn.Module):
-    def __init__(self, target):
-        super(LossForOCAnti, self).__init__()
-        self.target = target
-
-    def loss(self, ground_truth, predicted):
-        raise NotImplementedError("loss has not been implemented")
-
-class CompactnessLoss(LossForOCAnti):
-    def __init__(self, target):
-        super(CompactnessLoss, self).__init__()
-
-    def loss(self, ground_truth, predicted):
-        return 0
-
-class DescriptiveLoss(LossForOCAnti):
-    def __init__(self):
-        super(DescriptiveLoss, self).__init__()
-        self.target = target
-
-    def loss(self, ground_truth, predicted):
-        return 0
-
-
 class CenterLoss(nn.Module):
     def __init__(self, num_classes, feat_dim):
         super(CenterLoss, self).__init__()
@@ -81,6 +57,7 @@ class CenterlossFunction(Function):
         grad_centers = Variable(grad_centers/counts.view(-1, 1))
 
         return grad_feature * grad_output, None, grad_centers
+
 
 class AngularIsoLoss(nn.Module):
     def __init__(self, feat_dim=2, r_real=0.9, r_fake=0.5, alpha=20.0):
@@ -195,84 +172,6 @@ class IsolateSquareLoss(nn.Module):
                + F.relu(self.r_fake**2 - torch.pow(torch.norm(x[labels==1]-self.center, p=2, dim=1),2)).mean()
         return loss
 
-class MultiCenterIsolateLoss(nn.Module):
-    def __init__(self, centers, num_classes=10, feat_dim=2, r_real=0.042, r_fake=1.638):
-        super(MultiCenterIsolateLoss, self).__init__()
-        self.num_classes = num_classes
-        self.feat_dim = feat_dim
-        self.r_real = r_real
-        self.r_fake = r_fake
-
-        self.centers = centers
-
-    def forward(self, x, labels):
-        num_centers = self.centers.shape[0]
-        genuine_data = x[labels == 0].repeat(num_centers, 1, 1).transpose(0,1)
-        genuine_dist = torch.norm((genuine_data - self.centers.unsqueeze(0)), p=2, dim=2)
-        try:
-            min_genuine_dist_values, indices = torch.min(genuine_dist, dim=1)
-            loss = F.relu(min_genuine_dist_values - self.r_real).mean()
-        except:
-            loss = 0
-        spoofing_data = x[labels == 1].repeat(num_centers, 1, 1).transpose(0, 1)
-        spoofing_dist = torch.norm((spoofing_data - self.centers.unsqueeze(0)), p=2, dim=2)
-        loss += F.relu(self.r_fake - spoofing_dist).mean()
-        return loss
-
-class MultiIsolateCenterLoss(nn.Module):
-    # This loss should be similar to center loss, learning center by itself
-    def __init__(self, feat_dim, num_centers, r_real=0.042, r_fake=1.638):
-        super(MultiIsolateCenterLoss, self).__init__()
-        self.feat_dim = feat_dim
-        self.num_centers = num_centers
-        self.r_real = r_real
-        self.r_fake = r_fake
-        self.centers = nn.Parameter(torch.randn(num_centers, self.feat_dim)*(r_real+r_fake)/2)
-
-    def forward(self, x, labels):
-        genuine_data = x[labels == 0].repeat(self.num_centers, 1, 1).transpose(0, 1)
-        genuine_dist = torch.norm((genuine_data - self.centers.unsqueeze(0)), p=2, dim=2)
-        try:
-            min_genuine_dist_values, indices = torch.min(genuine_dist, dim=1)
-            loss = F.relu(min_genuine_dist_values - self.r_real).mean()
-        except:
-            loss = 0
-        spoofing_data = x[labels == 1].repeat(self.num_centers, 1, 1).transpose(0, 1)
-        spoofing_dist = torch.norm((spoofing_data - self.centers.unsqueeze(0)), p=2, dim=2)
-
-        min_spoofing_dist_values, indices = torch.min(spoofing_dist, dim=1)
-        loss += F.relu(self.r_fake - min_spoofing_dist_values).mean()
-        # loss += F.relu(self.r_fake - spoofing_dist).mean()
-
-        return loss
-
-class MultiIsolateCenterLossEM(nn.Module):
-    # This loss should be similar to center loss, learning center by itself
-    def __init__(self, num_centers, r_fake=1.638):
-        super(MultiIsolateCenterLossEM, self).__init__()
-        self.num_centers = num_centers
-        self.r_real = nn.Parameter(1)
-        self.r_fake = r_fake
-        self.priors = nn.Parameter(torch.randn(num_centers))
-        self.centers = nn.Parameter(torch.randn(num_centers, self.feat_dim))
-
-    def forward(self, x, labels):
-        genuine_data = x[labels == 0].repeat(self.num_centers, 1, 1).transpose(0, 1)
-        genuine_dist = torch.norm((genuine_data - self.centers.unsqueeze(0)), p=2, dim=2) * self.priors
-        try:
-            min_genuine_dist_values, indices = torch.min(genuine_dist, dim=1)
-            loss = F.relu(min_genuine_dist_values - self.r_real).mean()
-        except:
-            loss = 0
-        spoofing_data = x[labels == 1].repeat(self.num_centers, 1, 1).transpose(0, 1)
-        spoofing_dist = torch.norm((spoofing_data - self.centers.unsqueeze(0)), p=2, dim=2)
-
-        min_spoofing_dist_values, indices = torch.min(spoofing_dist, dim=1)
-        loss += F.relu(self.r_fake - min_spoofing_dist_values).mean()
-        # loss += F.relu(self.r_fake - spoofing_dist).mean()
-
-        return loss
-
 
 class OCSoftmax(nn.Module):
     def __init__(self, feat_dim=2, r_real=0.9, r_fake=0.5, alpha=20.0):
@@ -305,6 +204,7 @@ class OCSoftmax(nn.Module):
         # print(output_scores.squeeze(1).shape)
 
         return loss, -output_scores.squeeze(1)
+
 
 class AMSoftmax(nn.Module):
     def __init__(self, num_classes, enc_dim, s=20, m=0.9):
